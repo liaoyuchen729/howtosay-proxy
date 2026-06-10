@@ -47,8 +47,12 @@ function systemPrompt(lang, style) {
     `e.g. Japanese drops subjects, so a "うにはすきじゃない" → "I" gets sourceSpan="". ` +
     `Also "" for English-only insertions: articles a/an/the without a source word, dummy do/does/did inserted ` +
     `purely for grammar, or "to" in "want to". NEVER reuse an unrelated source word just to fill the field. ` +
-    `Source particles with no meaning of their own (Japanese は/が/を/に/で, Chinese 的/了/吗) should NOT be ` +
-    `targeted by any English unit — leave them unaligned. ` +
+    `Source particles with no semantic content (Japanese は/が/を/に/で/と/も/から/まで/ね/よ, Chinese 的/了/吗/呢/吧) ` +
+    `MUST NEVER be the sourceSpan of any English unit. An English copula like is/am/are/'m/'s that the source ` +
+    `expresses with such a particle should use sourceSpan="" (not the particle). ` +
+    `Keep each sourceSpan to the MINIMAL substring that carries that English unit's meaning — do not stretch ` +
+    `it to include adjacent words. E.g. for "すきじゃない" → "don't like", map "like"→"すき" and "don't"→"じゃない", ` +
+    `not the whole "すきじゃない" twice. ` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
