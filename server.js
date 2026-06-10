@@ -103,12 +103,23 @@ function systemPrompt(lang, style, text = "") {
     `${TEMPLATE_NAMES.map(n => `    "${n}"`).join(",\n")}\n` +
     `\n` +
     `  CRITICAL — only pick a templateKey if there is a TRULY EXACT semantic match (95%+ overlap). ` +
-    `If your grammar point is e.g. "prefer X to Y", "would rather", "had better", "so ... that", ` +
-    `"too ... to", "the more ... the more", "way + comparative", "have something done", or any other ` +
-    `fixed expression / collocation NOT in the list, set templateKey = "" and DO NOT pick a vaguely ` +
-    `similar entry. Picking a wrong template is WORSE than picking none. ` +
-    `Surface similarity (e.g. "比起意面我更喜欢寿司" looks comparative) is NOT enough — match by EXACT ` +
-    `grammar structure, not by surface vibes.\n` +
+    `A WRONG templateKey is much WORSE than templateKey="" (we have a good fallback for "").\n` +
+    `\n` +
+    `  COMMON MISTAKES TO AVOID — for these structures the list has NO match, set templateKey="":\n` +
+    `    • "prefer X to Y" → NOT "不定式作宾语(want/decide 类)". The "to" here is a PREPOSITION (= "rather than"), ` +
+    `not the infinitive "to". leave templateKey="".\n` +
+    `    • "way more / way better / way too" → NOT "the more ... the more". "way" is an intensifier (= much), ` +
+    `not the "the more X the more Y" correlative. leave templateKey="".\n` +
+    `    • "would rather X than Y" → NOT in the list (the "would rather(宁愿)" entry covers a different sense). ` +
+    `If in doubt, leave templateKey="".\n` +
+    `    • "had better", "be supposed to", "be about to", "end up doing", "be used to doing", "get used to", ` +
+    `"can't help doing", "look forward to", "it's no use", "feel like doing" → NOT in the list. ` +
+    `Leave templateKey="".\n` +
+    `    • "so + adj + that ...", "such + n + that ...", "too + adj + to ...", "adj enough to ..." → NOT in the list.\n` +
+    `    • Any fixed phrasal / idiom that is not literally one of the 164 names → leave templateKey="".\n` +
+    `\n` +
+    `  Match by EXACT grammar structure, not by surface similarity. ` +
+    `"比起意面我更喜欢寿司" SOUNDS comparative but its grammar is "prefer X to Y" — set templateKey="".\n` +
     `\n` +
     `  STEP 3 — fill the fields:\n` +
     `  • templateKey: the chosen list entry, or "" if no perfect match.\n` +
