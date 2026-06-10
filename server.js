@@ -37,8 +37,14 @@ function systemPrompt(lang, style) {
     `whole translation. For each unit:\n` +
     `  • english: its English text.\n` +
     `  • partOfSpeech: exactly one of [${POS.join(", ")}].\n` +
-    `  • sourceSpan: the EXACT substring of the user's input this unit maps to; use "" if it has no counterpart ` +
-    `in the source (e.g. an added English subject).\n` +
+    `  • sourceSpan: the EXACT contiguous substring of the user's input that this English unit corresponds to ` +
+    `by MEANING (not by position). For example, if the user wrote "うにはすきじゃない" and the English unit is ` +
+    `"sea urchin", sourceSpan MUST be "うに" — never another word at the same position. ` +
+    `For Japanese particles like は/が/を/に, Chinese 的/了/吗, etc. that have NO English counterpart, the unit ` +
+    `should NOT appear in the words list at all (just skip them in alignment). ` +
+    `Use "" ONLY when the English unit is genuinely added with no source (e.g. an English subject I/he that the ` +
+    `source omitted). The words array must be in the order of the ENGLISH translation (left to right); ` +
+    `sourceSpan values can be in any order across the source text.\n` +
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
     `  • isGrammarStructure: true for a multi-word grammar pattern, false for an ordinary vocabulary word.\n` +
     `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
