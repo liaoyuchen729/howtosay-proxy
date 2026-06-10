@@ -145,7 +145,7 @@ function systemPrompt(lang, style, text = "") {
     `simple past), or leave templateKey="" if no clear pattern.\n` +
     `  The grammar must be IN your translation. Picking a structure that only exists in the source language is wrong.\n` +
     `\n` +
-    `  STEP 2 — try to match it to ONE entry in this list of 164 well-known grammar templates ` +
+    `  STEP 2 — try to match it to ONE entry in this list of ${TEMPLATE_NAMES.length} well-known grammar templates ` +
     `(internal IDs in Simplified Chinese, learner sees a localized version):\n` +
     `${TEMPLATE_NAMES.map(n => `    "${n}"`).join(",\n")}\n` +
     `\n` +
