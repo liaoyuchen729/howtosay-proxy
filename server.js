@@ -37,22 +37,29 @@ function systemPrompt(lang, style) {
     `whole translation. For each unit:\n` +
     `  • english: its English text.\n` +
     `  • partOfSpeech: exactly one of [${POS.join(", ")}].\n` +
-    `  • sourceSpan: the EXACT contiguous substring of the user's input that this English unit corresponds to ` +
-    `by MEANING (not by position). For example, if the user wrote "うにはすきじゃない" and the English unit is ` +
-    `"sea urchin", sourceSpan MUST be "うに" — never another word at the same position. ` +
-    `For Japanese particles like は/が/を/に, Chinese 的/了/吗, etc. that have NO English counterpart, the unit ` +
-    `should NOT appear in the words list at all (just skip them in alignment). ` +
-    `If the source DOES contain a word for this English unit, you MUST map to it — e.g. Chinese "我"→"I", ` +
-    `"不"→"don't"/"not", Spanish "yo"→"I". Only use sourceSpan="" when the source TRULY omits the meaning — ` +
-    `e.g. Japanese drops subjects, so a "うにはすきじゃない" → "I" gets sourceSpan="". ` +
-    `Also "" for English-only insertions: articles a/an/the without a source word, dummy do/does/did inserted ` +
-    `purely for grammar, or "to" in "want to". NEVER reuse an unrelated source word just to fill the field. ` +
-    `Source particles with no semantic content (Japanese は/が/を/に/で/と/も/から/まで/ね/よ, Chinese 的/了/吗/呢/吧) ` +
-    `MUST NEVER be the sourceSpan of any English unit. An English copula like is/am/are/'m/'s that the source ` +
-    `expresses with such a particle should use sourceSpan="" (not the particle). ` +
-    `Keep each sourceSpan to the MINIMAL substring that carries that English unit's meaning — do not stretch ` +
-    `it to include adjacent words. E.g. for "すきじゃない" → "don't like", map "like"→"すき" and "don't"→"じゃない", ` +
-    `not the whole "すきじゃない" twice. ` +
+    `  • sourceSpan — STRICT RULES (failure to follow these breaks the app):\n` +
+    `    A. sourceSpan MUST be COPIED CHARACTER-FOR-CHARACTER from the user's input. Same case ("Tienes" not ` +
+    `"tienes"), same diacritics ("Você" not "voce"), same inflection / conjugation / particle ("किया" not "करना"). ` +
+    `If your chosen span is not literally found inside the input string, the whole answer is wrong.\n` +
+    `    B. Map by MEANING, not by position. E.g. "うにはすきじゃない" → "sea urchin" sourceSpan = "うに".\n` +
+    `    C. NEVER invent or substitute a word that is not in the input. If the source has no word for this ` +
+    `English unit, sourceSpan MUST be the empty string "". Common cases of "":\n` +
+    `       - The source language omits the subject and you added an English pronoun ` +
+    `(Japanese / Korean / Chinese / Spanish / Portuguese / Vietnamese / Indonesian / Hindi all drop subjects).\n` +
+    `       - English articles a/an/the with no source counterpart.\n` +
+    `       - Auxiliary verbs do/does/did/have/has/will/can inserted only for English grammar when the source ` +
+    `expresses the same idea inside another word (Spanish "Tienes hambre?" → "Are/you" both have sourceSpan="", ` +
+    `"hungry"→"hambre"; Korean "지금 뭐 해?" → "What"→"뭐", "are/you"→"", "doing"→"해", "now"→"지금").\n` +
+    `       - English copula is/am/are/'m/'s when the source uses a particle (は/が) or nothing.\n` +
+    `       - The English "to" in "want to do".\n` +
+    `    D. If the source DOES contain the word, you MUST map to it — Chinese "我"→"I", "不"→"don't"/"not", ` +
+    `Spanish "yo"→"I" (or "" if the pronoun is dropped). Do not output "" when a real source word exists.\n` +
+    `    E. Source particles with no semantic load (Japanese は/が/を/に/で/と/も/から/まで/ね/よ, Chinese ` +
+    `的/了/吗/呢/吧, Korean 은/는/이/가/을/를/에/에서) MUST NEVER appear as a sourceSpan. Leave them unaligned.\n` +
+    `    F. Keep each sourceSpan to the MINIMAL substring carrying that meaning. Do not include neighboring ` +
+    `words. For "すきじゃない" → "don't like": "like"="すき", "don't"="じゃない".\n` +
+    `    G. Self-check before returning: every non-empty sourceSpan must satisfy ` +
+    `(sourceText.includes(sourceSpan) === true). If not, set it to "".\n` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
