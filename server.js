@@ -96,7 +96,17 @@ function systemPrompt(lang, style, text = "") {
     `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
     `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). For each:\n` +
     `\n` +
-    `  STEP 1 — identify what the grammar point actually is for THIS sentence.\n` +
+    `  STEP 1 — identify the grammar by inspecting YOUR ENGLISH TRANSLATION, not the user's source.\n` +
+    `  Read your translation back. Which fixed structures actually appear in those English words?\n` +
+    `  - If your translation contains "prefer X to Y" → match prefer X to Y.\n` +
+    `  - If it contains "way more / way better / way too" → match "way + 比较级", NOT prefer.\n` +
+    `  - If it contains "had better / 'd better" → match had better.\n` +
+    `  - If it contains "end up + V-ing" → match end up doing.\n` +
+    `  - If it contains a plain "should + base verb" → just past tense / simple modal — do NOT force a fit.\n` +
+    `  - If your translation does NOT contain the source's idiomatic structure (e.g. user wrote "最终爱上" but you ` +
+    `translated as "eventually fell in love"), pick a templateKey based on the actual English you produced (e.g. ` +
+    `simple past), or leave templateKey="" if no clear pattern.\n` +
+    `  The grammar must be IN your translation. Picking a structure that only exists in the source language is wrong.\n` +
     `\n` +
     `  STEP 2 — try to match it to ONE entry in this list of 164 well-known grammar templates ` +
     `(internal IDs in Simplified Chinese, learner sees a localized version):\n` +
