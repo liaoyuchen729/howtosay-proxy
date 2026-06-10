@@ -660,18 +660,25 @@ app.post("/word-example", async (req, res) => {
     }
     const lang = String(sourceLanguage);
     cacheSweep();
-    const key = `${lang}|${String(english).trim().toLowerCase()}`;
+    // 缓存键带上释义(义项):同一个英文词在不同句子里意思可能不同
+    // (break=壊れる vs break=休憩),按 (语言, 词, 义项) 分开缓存,
+    // 避免第一个用户的义项例句被另一个义项的用户看到。
+    const sense = String(definition).trim().toLowerCase();
+    const key = `${lang}|${String(english).trim().toLowerCase()}|${sense}`;
     const hit = exampleCache.get(key);
     if (hit) return res.json(hit);
 
     const prompt =
       `You write ONE example sentence for an English-learning app. The learner speaks ${lang}.\n` +
       `Target word/phrase: "${String(english)}"` +
-      (definition ? ` (meaning in ${lang}: "${String(definition)}")` : "") + `\n` +
+      (definition ? ` — in the SPECIFIC sense of ${lang} "${String(definition)}"` : "") + `\n` +
+      (definition ? `The example MUST use the word in exactly this sense; many English words have multiple ` +
+        `senses (e.g. "break" = shatter vs. take a rest) and using a different sense than the one given ` +
+        `is a hard failure.\n` : "") +
       `Return:\n` +
       `- en: one natural English sentence (8-14 words) that uses "${String(english)}" exactly as given.\n` +
-      `- cn: its ${lang} translation. The translation MUST contain the ${lang} rendering of "${String(english)}" — ` +
-      `never paraphrase the key word away. Write cn ONLY in ${lang}.`;
+      `- cn: its ${lang} translation. The translation MUST contain the ${lang} rendering of "${String(english)}" ` +
+      `in that same sense — never paraphrase the key word away. Write cn ONLY in ${lang}.`;
     const content = await openAIJSON({
       model: MODEL,
       temperature: 0.7,
