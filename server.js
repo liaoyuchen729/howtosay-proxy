@@ -566,12 +566,29 @@ app.post("/translate", async (req, res) => {
         if (ES_PT_FILLER.has(t.toLowerCase()) && t.length <= 3) return true;
         return false;
       };
+      // 头尾粘连的助词剪掉(例:"のうんこ"→"うんこ"、"방귀가"→"방귀")。
+      // 只剪头尾、一次一个字符,词中间不动;中文的 的/了 可能是词的一部分(真的/算了),不剪尾。
+      const LEAD_TRIM  = new Set([...JP_PARTICLES, ...ZH_PARTICLES, "은","는","이","가","을","를","에","의","도","만","로","와","과"]);
+      const TAIL_TRIM  = new Set([...JP_PARTICLES, "吗","嗎","呢","吧","啊","哦","么","麼", "은","는","이","가","을","를","에","의","도","만","로","와","과"]);
+      // 长度保护:剪到剩 2 字符为止 —— うに/かに 这类以助词同形字结尾的真词不被剪坏,
+      // 代价是 犬が 这种 2 字短span保留尾助词,只是染色多盖一个字,可接受
+      const trimParticles = (s) => {
+        let t = s;
+        while (t.length > 2 && LEAD_TRIM.has(t[0]))            t = t.slice(1);
+        while (t.length > 2 && TAIL_TRIM.has(t[t.length - 1])) t = t.slice(0, -1);
+        return t;
+      };
       for (const w of parsed.words) {
         if (!w || typeof w.sourceSpan !== "string" || w.sourceSpan === "") continue;
         if (isParticleOnly(w.sourceSpan)) {
           w.sourceSpan = "";
           fixCount++;
           continue;
+        }
+        const trimmed = trimParticles(w.sourceSpan);
+        if (trimmed !== w.sourceSpan) {
+          w.sourceSpan = trimmed;
+          fixCount++;
         }
         const span = w.sourceSpan;
         if (src.includes(span)) continue;   // ✓ 已经是真子串
