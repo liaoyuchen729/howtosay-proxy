@@ -85,9 +85,19 @@ function systemPrompt(lang) {
     `user message.\n` +
     `  Pick wording that is DISTINCTLY different from the other three styles; if the only difference would be ` +
     `a contraction, push further (different vocabulary, different sentence shape).\n` +
-    `- words: split the English translation into meaningful units IN ORDER (single words, or multi-word chunks ` +
-    `such as phrasal verbs or grammar structures like "wouldn't have done"). Together the units must cover the ` +
-    `whole translation. For each unit:\n` +
+    `- words: split the English translation into meaningful units IN ORDER. Together the units must cover the ` +
+    `whole translation.\n` +
+    `  SPLITTING RULES (learners bookmark individual words into their vocabulary book — a merged chunk ` +
+    `cannot be bookmarked):\n` +
+    `  • A noun is ALWAYS its own unit. NEVER merge a possessive / article / adjective into the noun's unit: ` +
+    `"your farts" → "your" + "farts"; "my nose" → "my" + "nose"; "dog feces" → "dog" + "feces"; ` +
+    `"the red car" → "the" + "red" + "car".\n` +
+    `  • Multi-word units are ONLY allowed for (a) fixed lexical items whose meaning is non-compositional: ` +
+    `phrasal verbs ("give up"), idioms ("piece of cake"), established compounds ("ice cream", "sea urchin"); ` +
+    `(b) grammar chunks ("wouldn't have done", "might break", "worse than").\n` +
+    `  • Grammar chunks must be MINIMAL — do not absorb subject pronouns or neighboring content words. ` +
+    `"They smell worse than" is WRONG: split as "They" + "smell" + "worse than".\n` +
+    `  For each unit:\n` +
     `  • english: its English text.\n` +
     `  • partOfSpeech: exactly one of [${POS.join(", ")}].\n` +
     `  • sourceSpan — STRICT RULES (failure to follow these breaks the app):\n` +
@@ -105,8 +115,15 @@ function systemPrompt(lang) {
     `"hungry"→"hambre"; Korean "지금 뭐 해?" → "What"→"뭐", "are/you"→"", "doing"→"해", "now"→"지금").\n` +
     `       - English copula is/am/are/'m/'s when the source uses a particle (は/が) or nothing.\n` +
     `       - The English "to" in "want to do".\n` +
-    `    D. If the source DOES contain the word, you MUST map to it — Chinese "我"→"I", "不"→"don't"/"not", ` +
-    `Spanish "yo"→"I" (or "" if the pronoun is dropped). Do not output "" when a real source word exists.\n` +
+    `    D. If the source DOES contain a CONTENT word, you MUST map to it — Chinese "不"→"don't"/"not", ` +
+    `Japanese "おなら"→"farts". Do not output "" when a real source content word exists.\n` +
+    `       EXCEPTION — these English FUNCTION words always get sourceSpan="" even when the source has a ` +
+    `corresponding word, because the mapping is obvious and colors are reserved for content words: ` +
+    `personal pronouns (I/you/he/she/it/we/they, me/him/her/us/them), possessive determiners ` +
+    `(my/your/his/her/its/our/their), the verb be (am/is/are/was/were, 'm/'s/'re), articles (a/an/the). ` +
+    `E.g. Japanese "私は元気" → "I"="", "fine"="元気"; "お前のおなら" → "your"="", "farts"="おなら"; ` +
+    `Chinese "我喜欢你" → "I"="", "like"="喜欢", "you"=""; Spanish "yo te quiero" → "I"="", "love"="quiero", ` +
+    `"you"="". This applies to every source language.\n` +
     `    E. Source particles / postpositions / discourse markers with no standalone semantic load MUST NEVER ` +
     `appear as a sourceSpan. Leave them unaligned (sourceSpan=""). Lists by language:\n` +
     `       - Japanese: は が を に へ で と も から まで の や ね よ か な ば ぞ ぜ さ わ\n` +
@@ -430,6 +447,48 @@ app.post("/translate", async (req, res) => {
           examples: g.examples || []
         };
       });
+    }
+
+    // ①.5 词块整形(处理英文侧 → 对 9 种源语言一律生效):
+    //   a) 「所有格/冠词 + 单个名词」若被合成一个词块,拆开 —— 名词必须可单独收藏
+    //      (模型按 prompt 应该已经拆好,这里是兜底;拆出的限定词不染色、无释义)
+    //   b) 代词 / be 动词 / 冠词及其缩写,永远 sourceSpan=""(不染色)——
+    //      I=我 这种映射用户不需要,颜色留给实词
+    if (Array.isArray(parsed.words)) {
+      const DET = new Set(["my","your","his","her","its","our","their","a","an","the"]);
+      const reshaped = [];
+      for (const w of parsed.words) {
+        const eng = (w && typeof w.english === "string") ? w.english.trim() : "";
+        const m = eng.match(/^(\S+)\s+(\S+)$/);
+        if (m && DET.has(m[1].toLowerCase()) && !w.isGrammarStructure) {
+          reshaped.push({
+            english: m[1],
+            partOfSpeech: ["a","an","the"].includes(m[1].toLowerCase()) ? "article" : "pronoun",
+            sourceSpan: "",
+            definition: "",
+            isGrammarStructure: false,
+            examples: []
+          });
+          reshaped.push({ ...w, english: m[2] });
+        } else {
+          reshaped.push(w);
+        }
+      }
+      parsed.words = reshaped;
+      const FUNCTION_WORDS = new Set([
+        "i","you","he","she","it","we","they","me","him","her","us","them",
+        "my","your","his","its","our","their","mine","yours","hers","ours","theirs",
+        "am","is","are","was","were","be","been","being",
+        "a","an","the",
+        "i'm","you're","he's","she's","it's","we're","they're",
+        "'m","'s","'re","isn't","aren't","wasn't","weren't"
+      ]);
+      for (const w of parsed.words) {
+        if (!w || typeof w.english !== "string") continue;
+        if (FUNCTION_WORDS.has(w.english.trim().toLowerCase())) {
+          w.sourceSpan = "";
+        }
+      }
     }
 
     // ② 服务端兜底:words 里凡是出现在某 grammarPoint.triggerWords 的英文片段,
