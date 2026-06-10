@@ -516,6 +516,21 @@ app.post("/translate", async (req, res) => {
         .normalize("NFD").replace(/[̀-ͯ]/g, "");  // 去重音
       const srcFolded = fold(src);
       let fixCount = 0;
+      // 比较结构兜底:模型习惯把比较助词留空(より/보다/比),但 than 的对应是学习者
+      // 明确想看的。译文有 than 而模型没对齐时,从源文里把比较标记补上(9 种语言)。
+      if (/(^|[^A-Za-z])than([^A-Za-z]|$)/i.test(String(parsed.translation || ""))) {
+        const THAN_MARKERS = ["より", "보다", "hơn", "daripada", "से"];
+        // 中文的 比 单独处理:排除 比如/比方 这类非比较用法
+        const zhCompare = src.includes("比") && !/比如|比方|比萨|比赛/.test(src);
+        for (const w of parsed.words) {
+          if (!w || typeof w.english !== "string") continue;
+          if (w.english.trim().toLowerCase() !== "than" || w.sourceSpan) continue;
+          const m = THAN_MARKERS.find(t => src.includes(t));
+          if (m) { w.sourceSpan = m; fixCount++; }
+          else if (zhCompare) { w.sourceSpan = "比"; fixCount++; }
+          break;
+        }
+      }
       // 只是助词 / 标点 / 空白 的 sourceSpan 全部置空,
       // 避免染色染到"看起来跟英文词无关"的字符上(例:It's 染到 「は」)。
       // 同时凡是 sourceSpan 跟 english 一模一样(看似抄回去)→ 多半是模型偷懒,也置空。
