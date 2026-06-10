@@ -152,8 +152,40 @@ app.post("/translate", async (req, res) => {
     const content = data.choices?.[0]?.message?.content;
     if (!content) return res.status(502).json({ error: "no_content" });
 
-    // content 已经是 App 需要的结果 JSON,直接原样返回
-    res.type("application/json").send(content);
+    // 服务端校验:确保每个 sourceSpan 都是原文的真子串。
+    // 模型偶尔会:① 大小写/重音不一致 ② 给词根而非源文实际形式 ③ 凭空发明源文里没有的词。
+    // 这里逐一修正,保证结果 JSON 永远是合法对齐。
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
+    if (Array.isArray(parsed.words)) {
+      const src = String(sourceText);
+      const fold = s => s.toLowerCase()
+        .normalize("NFD").replace(/[̀-ͯ]/g, "");  // 去重音
+      const srcFolded = fold(src);
+      let fixCount = 0;
+      for (const w of parsed.words) {
+        if (!w || typeof w.sourceSpan !== "string" || w.sourceSpan === "") continue;
+        const span = w.sourceSpan;
+        if (src.includes(span)) continue;   // ✓ 已经是真子串
+        // 尝试同形不同 case / 去重音匹配,取回源文里实际出现的形式
+        const sf = fold(span);
+        const idx = srcFolded.indexOf(sf);
+        if (idx >= 0 && sf.length > 0) {
+          // 取出源文里对应位置的真实子串
+          // 由于 fold 可能改长度(去重音不改长度,小写也不改),通常可直接 slice
+          if (srcFolded.length === src.length) {
+            w.sourceSpan = src.slice(idx, idx + span.length);
+            fixCount++;
+            continue;
+          }
+        }
+        // 实在不行 → 置空
+        w.sourceSpan = "";
+        fixCount++;
+      }
+      if (fixCount > 0 && process.env.LOG_FIXUPS) console.log(`fixed ${fixCount} spans`);
+    }
+    res.json(parsed);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
