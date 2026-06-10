@@ -83,8 +83,17 @@ function systemPrompt(lang, style) {
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
     `  • isGrammarStructure: true for a multi-word grammar pattern, false for an ordinary vocabulary word.\n` +
     `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
-    `- grammarPoints: the key grammar structures in the sentence; name = a short grammar-point name, ` +
-    `triggerWords = the English fragments that trigger it.\n\n` +
+    `- grammarPoints: 1-3 key grammar structures in this sentence (not more). For each:\n` +
+    `  • name: a short grammar-point name written IN ${lang} (e.g. for Japanese learners use "現在完了形", ` +
+    `for Chinese use "现在完成时", for Spanish use "Pretérito perfecto"). Keep it short — 8 characters or fewer ` +
+    `when feasible.\n` +
+    `  • triggerWords: the English fragments in your translation that trigger this grammar point (e.g. ` +
+    `["have been", "for"] for present perfect continuous).\n` +
+    `  • structure: the abstract pattern, with English keywords and ${lang} placeholders, e.g. ` +
+    `"subject + have/has been + V-ing + for + 时长". Keep it on one line.\n` +
+    `  • meaning: a 1-3 sentence explanation written IN ${lang}, telling the learner when and why to use ` +
+    `this structure.\n` +
+    `  • examples: exactly 2 example sentences — en = English using the structure, cn = the same sentence in ${lang}.\n\n` +
     `All definitions and example translations (the cn field) MUST be written in ${lang}, never in any other language.`;
 }
 
@@ -110,9 +119,13 @@ const grammarSchema = {
   type: "object",
   properties: {
     name: { type: "string" },
-    triggerWords: { type: "array", items: { type: "string" } }
+    triggerWords: { type: "array", items: { type: "string" } },
+    meaning: { type: "string" },
+    structure: { type: "string" },
+    examples: { type: "array", items: exampleSchema }
   },
-  required: ["name","triggerWords"], additionalProperties: false
+  required: ["name","triggerWords","meaning","structure","examples"],
+  additionalProperties: false
 };
 const schema = {
   type: "object",
