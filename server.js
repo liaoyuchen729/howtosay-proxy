@@ -124,12 +124,19 @@ function systemPrompt(lang) {
     `E.g. Japanese "私は元気" → "I"="", "fine"="元気"; "お前のおなら" → "your"="", "farts"="おなら"; ` +
     `Chinese "我喜欢你" → "I"="", "like"="喜欢", "you"=""; Spanish "yo te quiero" → "I"="", "love"="quiero", ` +
     `"you"="". This applies to every source language.\n` +
-    `    E. Source particles / postpositions / discourse markers with no standalone semantic load MUST NEVER ` +
+    `    E. PURE grammatical markers (case / topic / mood particles with no English counterpart) MUST NEVER ` +
     `appear as a sourceSpan. Leave them unaligned (sourceSpan=""). Lists by language:\n` +
-    `       - Japanese: は が を に へ で と も から まで の や ね よ か な ば ぞ ぜ さ わ\n` +
+    `       - Japanese: は が を の や ね よ か な ば ぞ ぜ さ わ\n` +
     `       - Chinese (Hans/Hant): 的 了 吗 嗎 呢 吧 啊 哦 哈 嘛 呐 哟 喔\n` +
-    `       - Korean: 은 는 이 가 을 를 에 에서 의 와 과 도 만 로 으로 부터 까지 라고 라는\n` +
-    `       - Hindi (postpositions): ने को से में पर का की के तक से लिए वाला वाली\n` +
+    `       - Korean: 은 는 이 가 을 를 의 도 만 로 으로 라고 라는\n` +
+    `       - Hindi: ने ही भी तो ना वाला वाली वाले\n` +
+    `       BUT particles that DO translate into an English word MUST be aligned — learners want to see these:\n` +
+    `       より→"than", から→"from"/"because", まで→"until", へ/に→"to", と→"with"/"and", も→"too"/"also", ` +
+    `ずっと→"way"/"much"; Korean 보다→"than", 부터→"from", 까지→"until", 와/과→"with"/"and", 도→"too"; ` +
+    `Hindi में→"in", पर→"on", से→"from"/"than", तक→"until", के लिए→"for".\n` +
+    `       Example: "このことは思っていたよりずっと難しい" → "This"="このこと" (full word — こと is part of ` +
+    `the noun, NOT the particle と), "is"="", "way"="ずっと", "harder"="難しい", "than"="より", ` +
+    `"I"="", "thought"="思っていた".\n` +
     `       - Vietnamese (classifiers / final particles): cái con chiếc bài cuốn — these classifiers should NOT ` +
     `be a sourceSpan unless the English unit literally is "a/the [classifier-thing]"; final particles à, ạ, nhé, ` +
     `nhỉ, đi, thôi, mà never get a sourceSpan\n` +
@@ -515,11 +522,14 @@ app.post("/translate", async (req, res) => {
       // 跨语言纯标点(CJK 全角 + 拉丁 + 西语 ¿¡ + 印地语 dānḍa ।॥ + 越南语带音号常见标点)
       const PARTICLE_ONLY = /^[\s。、，,.\?\!？！¿¡…・·~〜「」『』""''()()\[\]【】《》\-—–:;:;।॥]*$/;
       // 覆盖 9 种语言:zh_Hans / zh_Hant / ja / ko / es / pt-BR / hi / vi / id
-      const JP_PARTICLES = new Set(["は","が","を","に","で","と","も","から","まで","へ","の","や","ね","よ","か","な","ば","ぞ","ぜ","さ","わ"]);
+      // 原则:只清「纯语法标记」(主格/宾格/语气);有英文对应词、学习者想看的助词
+      // (より=than、から=from、まで=until、へ/に=to、と=with/and、부터=from、में=in、पर=on)
+      // 【不在】黑名单里,模型对齐了就保留。
+      const JP_PARTICLES = new Set(["は","が","を","の","や","ね","よ","か","な","ば","ぞ","ぜ","さ","わ"]);
       const ZH_PARTICLES = new Set(["的","了","吗","嗎","呢","吧","啊","哦","哈","嘛","呐","哟","喔","么","麼"]);
-      const KO_PARTICLES = new Set(["은","는","이","가","을","를","에","에서","의","와","과","도","만","로","으로","부터","까지","라고","라는","에게","한테"]);
-      // Hindi 后置词 —— 单独出现时不该当成对齐
-      const HI_PARTICLES = new Set(["ने","को","से","में","पर","का","की","के","तक","लिए","वाला","वाली","वाले","ही","भी","तो","ना"]);
+      const KO_PARTICLES = new Set(["은","는","이","가","을","를","의","도","만","로","으로","라고","라는"]);
+      // Hindi:只清纯语法标记(作格 ने、强调 ही/भी/तो);में(in)/पर(on)/से(from)/तक(until)/को(to) 可对齐
+      const HI_PARTICLES = new Set(["ने","ही","भी","तो","ना","वाला","वाली","वाले"]);
       // 越南语句末小品词 / 部分单独出现的分类词
       const VI_PARTICLES = new Set(["à","ạ","nhé","nhỉ","đi","thôi","mà","ấy","này","đó","ơi","ư","hả","hử"]);
       // 印尼语黏附小品词
@@ -539,29 +549,16 @@ app.post("/translate", async (req, res) => {
         if (ES_PT_FILLER.has(t.toLowerCase()) && t.length <= 3) return true;
         return false;
       };
-      // 头尾粘连的助词剪掉(例:"のうんこ"→"うんこ"、"방귀가"→"방귀")。
-      // 只剪头尾、一次一个字符,词中间不动;中文的 的/了 可能是词的一部分(真的/算了),不剪尾。
-      const LEAD_TRIM  = new Set([...JP_PARTICLES, ...ZH_PARTICLES, "은","는","이","가","을","를","에","의","도","만","로","와","과"]);
-      const TAIL_TRIM  = new Set([...JP_PARTICLES, "吗","嗎","呢","吧","啊","哦","么","麼", "은","는","이","가","을","를","에","의","도","만","로","와","과"]);
-      // 长度保护:剪到剩 2 字符为止 —— うに/かに 这类以助词同形字结尾的真词不被剪坏,
-      // 代价是 犬が 这种 2 字短span保留尾助词,只是染色多盖一个字,可接受
-      const trimParticles = (s) => {
-        let t = s;
-        while (t.length > 2 && LEAD_TRIM.has(t[0]))            t = t.slice(1);
-        while (t.length > 2 && TAIL_TRIM.has(t[t.length - 1])) t = t.slice(0, -1);
-        return t;
-      };
+      // 注意:这里【不做】头尾助词修剪。曾按字符剪头尾助词("のうんこ"→"うんこ"),
+      // 但 CJK 里助词同形字常常是词的一部分(このこと、本当に、こんにちは、いつも、のみもの),
+      // 按字符剪必然误伤真词(このこと 被剪成 このこ)。宁可色块偶尔多盖一个助词,
+      // 也不能把词剪坏 —— 最小 span 交给 prompt 规则 F 约束模型。
       for (const w of parsed.words) {
         if (!w || typeof w.sourceSpan !== "string" || w.sourceSpan === "") continue;
         if (isParticleOnly(w.sourceSpan)) {
           w.sourceSpan = "";
           fixCount++;
           continue;
-        }
-        const trimmed = trimParticles(w.sourceSpan);
-        if (trimmed !== w.sourceSpan) {
-          w.sourceSpan = trimmed;
-          fixCount++;
         }
         const span = w.sourceSpan;
         if (src.includes(span)) continue;   // ✓ 已经是真子串
