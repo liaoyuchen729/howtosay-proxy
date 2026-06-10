@@ -13,6 +13,26 @@ import { dirname, join } from "path";
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
+// ============= Axiom 日志推送(可选,未配置时静默跳过) =============
+// 配置方式:在 Railway 环境变量加 AXIOM_TOKEN 和 AXIOM_DATASET 即生效。
+const AXIOM_TOKEN   = process.env.AXIOM_TOKEN   || "";
+const AXIOM_DATASET = process.env.AXIOM_DATASET || "";
+const AXIOM_INGEST  = AXIOM_DATASET
+  ? `https://api.axiom.co/v1/datasets/${AXIOM_DATASET}/ingest`
+  : "";
+function sendToAxiom(evt) {
+  if (!AXIOM_TOKEN || !AXIOM_INGEST) return; // 没配就跳过
+  // fire-and-forget,失败不影响主流程
+  fetch(AXIOM_INGEST, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${AXIOM_TOKEN}`
+    },
+    body: JSON.stringify([evt])
+  }).catch(() => {});  // 静默吞掉网络错误,不影响翻译
+}
+
 // 加载本地 157 + 别名,作为语法模板可选项
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const T = JSON.parse(readFileSync(join(__dirname, "templates.json"), "utf-8"));
@@ -249,18 +269,20 @@ app.post("/translate", async (req, res) => {
     // 这里逐一修正,保证结果 JSON 永远是合法对齐。
     let parsed;
     try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
-    // 日志埋点:fallback 高频统计(给我看哪些语法没被模板覆盖,以后补到本地)
+    // 日志埋点:fallback 高频统计 → ① console(Railway 原生面板)② Axiom(可聚合 SQL)
     if (Array.isArray(parsed.grammarPoints)) {
       for (const g of parsed.grammarPoints) {
         const tk = (g.templateKey || "").trim();
         if (!tk) {
-          // 一行 JSON 日志,便于以后用 Axiom/Logtail 做聚合统计
-          console.log(JSON.stringify({
+          const evt = {
             evt: "grammar_fallback",
             fb: g.name || "(unnamed)",
             lang: sourceLanguage,
-            srcSample: String(sourceText).slice(0, 60)
-          }));
+            srcSample: String(sourceText).slice(0, 60),
+            ts: new Date().toISOString()
+          };
+          console.log(JSON.stringify(evt));
+          sendToAxiom(evt);   // 没配 token 时静默跳过
         }
       }
     }
