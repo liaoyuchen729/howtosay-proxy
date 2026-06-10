@@ -103,8 +103,22 @@ function systemPrompt(lang, style, text = "") {
     `       - The English "to" in "want to do".\n` +
     `    D. If the source DOES contain the word, you MUST map to it — Chinese "我"→"I", "不"→"don't"/"not", ` +
     `Spanish "yo"→"I" (or "" if the pronoun is dropped). Do not output "" when a real source word exists.\n` +
-    `    E. Source particles with no semantic load (Japanese は/が/を/に/で/と/も/から/まで/ね/よ, Chinese ` +
-    `的/了/吗/呢/吧, Korean 은/는/이/가/을/를/에/에서) MUST NEVER appear as a sourceSpan. Leave them unaligned.\n` +
+    `    E. Source particles / postpositions / discourse markers with no standalone semantic load MUST NEVER ` +
+    `appear as a sourceSpan. Leave them unaligned (sourceSpan=""). Lists by language:\n` +
+    `       - Japanese: は が を に へ で と も から まで の や ね よ か な ば ぞ ぜ さ わ\n` +
+    `       - Chinese (Hans/Hant): 的 了 吗 嗎 呢 吧 啊 哦 哈 嘛 呐 哟 喔\n` +
+    `       - Korean: 은 는 이 가 을 를 에 에서 의 와 과 도 만 로 으로 부터 까지 라고 라는\n` +
+    `       - Hindi (postpositions): ने को से में पर का की के तक से लिए वाला वाली\n` +
+    `       - Vietnamese (classifiers / final particles): cái con chiếc bài cuốn — these classifiers should NOT ` +
+    `be a sourceSpan unless the English unit literally is "a/the [classifier-thing]"; final particles à, ạ, nhé, ` +
+    `nhỉ, đi, thôi, mà never get a sourceSpan\n` +
+    `       - Indonesian (clitic particles): -lah, -kah, -tah, sih, dong, kok, deh, nih, tuh — never a sourceSpan; ` +
+    `the prepositions di / ke / dari / pada DO carry meaning, those are OK to align to English in/at/to/from\n` +
+    `       - Spanish: standalone "que" used as relative pronoun or "se" reflexive marker — usually leave ""; ` +
+    `articles el/la/los/las/un/una align ONLY when English has the/a/an as a real unit\n` +
+    `       - Portuguese: same as Spanish (que / se / o / a / os / as / um / uma)\n` +
+    `       The rule: if the source word is a grammatical marker the target English doesn't need a separate ` +
+    `word for, set sourceSpan="". Don't grab it just to "have something there".\n` +
     `    F. Keep each sourceSpan to the MINIMAL substring carrying that meaning. Do not include neighboring ` +
     `words. For "すきじゃない" → "don't like": "like"="すき", "don't"="じゃない".\n` +
     `    G. Self-check before returning: every non-empty sourceSpan must satisfy ` +
@@ -112,14 +126,30 @@ function systemPrompt(lang, style, text = "") {
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
     `  • definition: the equivalent ${lang} word or expression. KEEP IT AS SHORT AS POSSIBLE — ideally just ` +
-    `the word itself. Strictly FORBIDDEN: meta-phrasings that wrap the meaning, such as ` +
-    `"Xのこと" / "Xという意味" / "Xを意味する" / "X的意思" / "X的事情" / "意为X" / "指的是X" / ` +
-    `"means X" / "refers to X" / Spanish "que significa X" / Portuguese "significa X" / Hindi "का अर्थ है X". ` +
-    `Also FORBIDDEN: redundant descriptive padding like Japanese "海に住むうに(sea urchin that lives in the sea)" ` +
-    `or "犬という動物". Just write the bare equivalent. Examples (Japanese): farts → "おなら" (NOT "おならのこと"); ` +
-    `stinks → "臭い" (NOT "臭いがする、という意味"); sea urchin → "うに" (NOT "海に住むうに"); fast → "速い" ` +
-    `(NOT "速いという意味"). The definition is at most ONE short clause; if you find yourself writing more than ` +
-    `~8 characters in CJK or ~6 words in others, you are over-explaining.\n` +
+    `the word itself. This rule applies UNIFORMLY to ALL target languages (Simplified Chinese, Traditional ` +
+    `Chinese, Japanese, Korean, Spanish, Portuguese-BR, Hindi, Vietnamese, Indonesian).\n` +
+    `    Strictly FORBIDDEN — meta-phrasings that wrap the meaning instead of stating it:\n` +
+    `      • Japanese:     "Xのこと" / "Xという意味" / "Xを意味する" / "Xという動物" / "Xに住むY"\n` +
+    `      • Chinese (Hans/Hant):  "X的意思" / "X的事情" / "意为X" / "指的是X" / "意思是X"\n` +
+    `      • Korean:       "X라는 뜻" / "X를 의미함" / "X이라는 것"\n` +
+    `      • Spanish:      "que significa X" / "se refiere a X" / "es una X que ..."\n` +
+    `      • Portuguese:   "que significa X" / "refere-se a X" / "é um X que ..."\n` +
+    `      • Hindi:        "X का अर्थ है" / "X का मतलब" / "X होने का अर्थ"\n` +
+    `      • Vietnamese:   "có nghĩa là X" / "nghĩa là X" / "ám chỉ X"\n` +
+    `      • Indonesian:   "yang berarti X" / "artinya X" / "mengacu pada X"\n` +
+    `    Also FORBIDDEN in every language: redundant descriptive padding (e.g. "sea urchin that lives in the ` +
+    `sea", "an animal called dog", "el animal llamado perro").\n` +
+    `    Just write the BARE equivalent. Examples across languages — all describe English "farts":\n` +
+    `      ja: "おなら"   (NOT "おならのこと")\n` +
+    `      zh: "屁"       (NOT "屁的意思" / "屁这个东西")\n` +
+    `      ko: "방귀"     (NOT "방귀라는 뜻")\n` +
+    `      es: "pedos"    (NOT "los pedos que uno suelta")\n` +
+    `      pt: "peidos"   (NOT "os peidos que se soltam")\n` +
+    `      hi: "पाद"      (NOT "पाद का अर्थ है")\n` +
+    `      vi: "rắm"      (NOT "có nghĩa là rắm")\n` +
+    `      id: "kentut"   (NOT "yang berarti kentut")\n` +
+    `    Length cap: at most ONE short clause. CJK ≤ ~8 chars, Korean ≤ ~10 chars, Latin/Devanagari ≤ ~6 words, ` +
+    `Vietnamese/Indonesian ≤ ~6 words. Going longer means you are over-explaining.\n` +
     `  • isGrammarStructure: true ONLY when this unit is itself a MULTI-WORD grammar pattern such as ` +
     `"had better", "wouldn't have done", "be supposed to", "prefer X to Y", "to go" (the infinitive marker). ` +
     `For ordinary single-word vocabulary — common nouns, verbs, adjectives, adverbs, including inflected forms ` +
@@ -127,10 +157,19 @@ function systemPrompt(lang, style, text = "") {
     `If in doubt, set false. Single content words are never grammar structures.\n` +
     `  • examples: exactly one example — en = an English sentence using the unit, ` +
     `cn = its ${lang} translation. The cn MUST contain a translation of THIS unit's meaning; ` +
-    `do NOT paraphrase the sentence in a way that drops the word. E.g. for en = "He always blames his farts ` +
-    `on the dog", the Japanese cn MUST include "おなら" (something like "彼はいつもおならを犬のせいにする") — ` +
-    `it is wrong to translate as "彼はいつも犬のせいにする" because the key word disappears. ` +
-    `If you cannot fit the word naturally, rewrite the en sentence to one where you can.\n` +
+    `do NOT paraphrase the sentence in a way that drops the word. This rule applies UNIFORMLY ACROSS ALL ` +
+    `target languages. The key word must survive translation.\n` +
+    `    Examples — for en = "He always blames his farts on the dog", correct cn in each language:\n` +
+    `      ja: "彼はいつもおならを犬のせいにする"   (NOT "彼はいつも犬のせいにする" — おなら 不见了)\n` +
+    `      zh: "他总是把自己的屁怪在狗身上"        (NOT "他总是怪狗" — 没了"屁")\n` +
+    `      ko: "그는 항상 자기 방귀를 개 탓으로 돌린다"  (NOT "그는 항상 개 탓을 한다")\n` +
+    `      es: "Siempre les echa la culpa de sus pedos al perro"  (NOT "Siempre culpa al perro")\n` +
+    `      pt: "Ele sempre joga a culpa dos peidos no cachorro"   (NOT "Ele sempre culpa o cachorro")\n` +
+    `      hi: "वह हमेशा अपने पाद का दोष कुत्ते पर डालता है"  (NOT "वह हमेशा कुत्ते पर दोष डालता है")\n` +
+    `      vi: "Anh ấy luôn đổ lỗi rắm của mình cho con chó"  (NOT "Anh ấy luôn đổ lỗi cho con chó")\n` +
+    `      id: "Dia selalu menyalahkan kentutnya pada anjing"  (NOT "Dia selalu menyalahkan anjing")\n` +
+    `    If you cannot fit the word naturally, REWRITE en to a sentence where you can — never drop the key word ` +
+    `from cn.\n` +
     `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). For each:\n` +
     `\n` +
     `  STEP 1 — identify the grammar by inspecting YOUR ENGLISH TRANSLATION, not the user's source.\n` +
@@ -371,10 +410,20 @@ app.post("/translate", async (req, res) => {
       // 只是助词 / 标点 / 空白 的 sourceSpan 全部置空,
       // 避免染色染到"看起来跟英文词无关"的字符上(例:It's 染到 「は」)。
       // 同时凡是 sourceSpan 跟 english 一模一样(看似抄回去)→ 多半是模型偷懒,也置空。
-      const PARTICLE_ONLY = /^[\s。、，,.\?\!？！…・·~〜「」『』""''()()\-—–]*$/;
-      const JP_PARTICLES = new Set(["は","が","を","に","で","と","も","から","まで","へ","の","や","ね","よ","か","な","ば","ぞ","ぜ"]);
-      const ZH_PARTICLES = new Set(["的","了","吗","呢","吧","啊","哦","哈","嘛","呐"]);
-      const KO_PARTICLES = new Set(["은","는","이","가","을","를","에","에서","의","와","과","도","만","로","으로"]);
+      // 跨语言纯标点(CJK 全角 + 拉丁 + 西语 ¿¡ + 印地语 dānḍa ।॥ + 越南语带音号常见标点)
+      const PARTICLE_ONLY = /^[\s。、，,.\?\!？！¿¡…・·~〜「」『』""''()()\[\]【】《》\-—–:;:;।॥]*$/;
+      // 覆盖 9 种语言:zh_Hans / zh_Hant / ja / ko / es / pt-BR / hi / vi / id
+      const JP_PARTICLES = new Set(["は","が","を","に","で","と","も","から","まで","へ","の","や","ね","よ","か","な","ば","ぞ","ぜ","さ","わ"]);
+      const ZH_PARTICLES = new Set(["的","了","吗","嗎","呢","吧","啊","哦","哈","嘛","呐","哟","喔","么","麼"]);
+      const KO_PARTICLES = new Set(["은","는","이","가","을","를","에","에서","의","와","과","도","만","로","으로","부터","까지","라고","라는","에게","한테"]);
+      // Hindi 后置词 —— 单独出现时不该当成对齐
+      const HI_PARTICLES = new Set(["ने","को","से","में","पर","का","की","के","तक","लिए","वाला","वाली","वाले","ही","भी","तो","ना"]);
+      // 越南语句末小品词 / 部分单独出现的分类词
+      const VI_PARTICLES = new Set(["à","ạ","nhé","nhỉ","đi","thôi","mà","ấy","này","đó","ơi","ư","hả","hử"]);
+      // 印尼语黏附小品词
+      const ID_PARTICLES = new Set(["lah","kah","tah","sih","dong","kok","deh","nih","tuh","-lah","-kah","-tah"]);
+      // 西/葡 短功能小词,只在很短(≤3 字)且明显是填充时剔除,避免误伤真冠词
+      const ES_PT_FILLER = new Set(["que","se","lo","la","los","las","o","a","os","as"]);
       const isParticleOnly = (sp) => {
         const t = sp.trim();
         if (t === "") return true;
@@ -382,6 +431,10 @@ app.post("/translate", async (req, res) => {
         if (JP_PARTICLES.has(t)) return true;
         if (ZH_PARTICLES.has(t)) return true;
         if (KO_PARTICLES.has(t)) return true;
+        if (HI_PARTICLES.has(t)) return true;
+        if (VI_PARTICLES.has(t)) return true;
+        if (ID_PARTICLES.has(t)) return true;
+        if (ES_PT_FILLER.has(t.toLowerCase()) && t.length <= 3) return true;
         return false;
       };
       for (const w of parsed.words) {
