@@ -190,6 +190,11 @@ function systemPrompt(lang, style, text = "") {
     `\n` +
     `  CRITICAL — only pick a templateKey if there is a TRULY EXACT semantic match (95%+ overlap). ` +
     `A WRONG templateKey is much WORSE than templateKey="" (we have a good fallback for "").\n` +
+    `  CRITICAL — if the template name embeds a specific English word (e.g. "really 句型", "prefer X to Y", ` +
+    `"had better"), THAT EXACT WORD must literally appear in YOUR translation of THIS request. ` +
+    `Synonyms do NOT count: if your translation says "seriously", the "really" template is WRONG — ` +
+    `seriously ≠ really, very ≠ really, truly ≠ really. Re-check this for every style: the casual / formal / ` +
+    `concise rewrites often swap the keyword out, and then the template no longer applies.\n` +
     `\n` +
     `  COMMON MISTAKES TO AVOID — for these structures the list has NO match, set templateKey="":\n` +
     `    • "prefer X to Y" → NOT "不定式作宾语(want/decide 类)". The "to" here is a PREPOSITION (= "rather than"), ` +
@@ -209,8 +214,12 @@ function systemPrompt(lang, style, text = "") {
     `\n` +
     `  STEP 3 — fill the fields:\n` +
     `  • templateKey: the chosen list entry, or "" if no perfect match.\n` +
-    `  • triggerWords: the English fragments in your translation that trigger this point ` +
-    `(e.g. ["prefer", "to"] for "prefer X to Y"; ["way", "more"] for "way more than").\n` +
+    `  • triggerWords: the English fragments in your translation that trigger this point. ` +
+    `List EVERY word that forms the pattern — including small connector words like than/to/of/as — ` +
+    `exactly as they appear in your translation: ` +
+    `["prefer", "to"] for "prefer X to Y"; ["way", "worse", "than"] for "way worse than" (do NOT omit "than"); ` +
+    `["as", "soon", "as"] for "as soon as"; ["had", "better"] for "had better". ` +
+    `Every triggerWord must be literally present in your translation.\n` +
     `  • contextualExamples: ALWAYS REQUIRED. Provide exactly 2 fresh example sentences that use this ` +
     `grammar point in a context that fits THIS user's topic (here: "${text.slice(0,80)}"). ` +
     `Do NOT recycle generic examples about unrelated topics. en = the English example, cn = its ${lang} translation.\n` +
@@ -341,6 +350,39 @@ app.post("/translate", async (req, res) => {
           sendToAxiom(evt);   // 没配 token 时静默跳过
         }
       }
+    }
+
+    // ⓪ 校验:语法点必须真的存在于「本次译文」里(跨语言通用 —— 校验对象是英文译文)。
+    //   场景:源文「本当に」让模型配了 "really 句型",但这次(casual)译文用的是 seriously,
+    //   结果语法解说里出现句子里根本没有的 really。两条规则:
+    //   a) triggerWords 必须逐个出现在译文里(整词匹配),不在的剔除;
+    //   b) templateKey 名字里嵌的英文关键词(≥3 个字母,排除占位符)至少要有一个出现在译文里,
+    //      否则整条丢弃 —— 宁可少一条语法,也不能展示译文里不存在的语法。
+    if (Array.isArray(parsed.grammarPoints) && typeof parsed.translation === "string") {
+      const translation = parsed.translation;
+      const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const inTranslation = (frag) => {
+        const f = String(frag).trim();
+        if (!f) return false;
+        return new RegExp(`(^|[^A-Za-z])${escapeRe(f)}([^A-Za-z]|$)`, "i").test(translation);
+      };
+      // 模板名里的占位符 / 泛指词,不算「具体关键词」
+      const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc"]);
+      parsed.grammarPoints = parsed.grammarPoints.filter(g => {
+        if (Array.isArray(g.triggerWords)) {
+          g.triggerWords = g.triggerWords.filter(inTranslation);
+        }
+        const tk = (g.templateKey || "").trim();
+        if (!tk) return true;  // 模型自答的 fallback 不在此校验范围
+        const keywords = (tk.match(/[A-Za-z']{3,}/g) || [])
+          .map(s => s.toLowerCase())
+          .filter(s => !PLACEHOLDER.has(s));
+        // 名字里有具体英文词(如 really / prefer / had better)但译文一个都没出现 → 配错了,丢弃
+        if (keywords.length > 0 && !keywords.some(inTranslation)) return false;
+        // 触发词全军覆没(译文里一个都找不到)→ 同样视为配错
+        if (!Array.isArray(g.triggerWords) || g.triggerWords.length === 0) return false;
+        return true;
+      });
     }
 
     // ① 整理 grammarPoints:
