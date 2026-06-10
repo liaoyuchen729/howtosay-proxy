@@ -249,6 +249,22 @@ app.post("/translate", async (req, res) => {
     // 这里逐一修正,保证结果 JSON 永远是合法对齐。
     let parsed;
     try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
+    // 日志埋点:fallback 高频统计(给我看哪些语法没被模板覆盖,以后补到本地)
+    if (Array.isArray(parsed.grammarPoints)) {
+      for (const g of parsed.grammarPoints) {
+        const tk = (g.templateKey || "").trim();
+        if (!tk) {
+          // 一行 JSON 日志,便于以后用 Axiom/Logtail 做聚合统计
+          console.log(JSON.stringify({
+            evt: "grammar_fallback",
+            fb: g.name || "(unnamed)",
+            lang: sourceLanguage,
+            srcSample: String(sourceText).slice(0, 60)
+          }));
+        }
+      }
+    }
+
     // ① 整理 grammarPoints:
     //   匹配模板 → name = 规范模板名(走本地多语言解释)
     //   没匹配   → name = 模型自己的简短名;同时带 meaning/structure/examples
