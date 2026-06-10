@@ -235,16 +235,9 @@ function systemPrompt(lang) {
     `["prefer", "to"] for "prefer X to Y"; ["way", "worse", "than"] for "way worse than" (do NOT omit "than"); ` +
     `["as", "soon", "as"] for "as soon as"; ["had", "better"] for "had better". ` +
     `Every triggerWord must be literally present in your translation.\n` +
-    `  • contextualExamples: ALWAYS REQUIRED. Provide exactly 2 fresh example sentences that use this ` +
-    `grammar point in a context that fits the topic of the user's sentence. ` +
-    `Do NOT recycle generic examples about unrelated topics. en = the English example, cn = its ${lang} translation.\n` +
-    `  • If templateKey != "": leave the fallback fields empty (name="", meaning="", structure="", examples=[]).\n` +
-    `  • If templateKey == "": fill all four fallback fields IN ${lang}:\n` +
-    `    – name: a short grammar-point name (e.g. "prefer X to Y 句型").\n` +
-    `    – structure: one-line pattern with English keywords and ${lang} placeholders.\n` +
-    `    – meaning: 1-2 sentence explanation.\n` +
-    `    – examples: 2 additional generic example pairs.\n\n` +
-    `All definitions and example translations (the cn field) MUST be written in ${lang}, never in any other language.`;
+    `  • name: if templateKey != "" → "". If templateKey == "" → a short grammar-point name IN ${lang} ` +
+    `(e.g. "prefer X to Y 句型"). Do NOT write any explanation here — details are fetched separately.\n\n` +
+    `All definitions (and any ${lang} text) MUST be written in ${lang}, never in any other language.`;
 }
 
 const exampleSchema = {
@@ -266,27 +259,20 @@ const wordSchema = {
   required: ["english","partOfSpeech","sourceSpan","definition","isGrammarStructure"],
   additionalProperties: false
 };
-// 语法点:能精准匹配本地模板就用,否则模型自己写完整解释
+// 语法点:/translate 只回最小引用(模板 ID 或 fallback 名 + 触发词)。
+// 详解(含义/结构/例句)在用户点开「语法详解」时按需走 /grammar-detail,
+// 模板命中时 App 用本地内容,零 API 成本。
 const grammarSchema = {
   type: "object",
   properties: {
-    // 模板 ID(来自 164 模板清单);不匹配填 ""
+    // 模板 ID(来自模板清单);不匹配填 ""
     templateKey: { type: "string", enum: TEMPLATE_ENUM },
     // 必填:本句英文里触发这个语法的片段
     triggerWords: { type: "array", items: { type: "string" } },
-    // 必填:针对本句话题(不是模板的死例句)的 2 条新鲜例句
-    contextualExamples: {
-      type: "array",
-      items: exampleSchema,
-      minItems: 2, maxItems: 2
-    },
-    // 当 templateKey=="" 时必须填的完整解释字段
-    name: { type: "string" },
-    meaning: { type: "string" },
-    structure: { type: "string" },
-    examples: { type: "array", items: exampleSchema }
+    // templateKey=="" 时的简短语法名;命中模板时填 ""
+    name: { type: "string" }
   },
-  required: ["templateKey","triggerWords","contextualExamples","name","meaning","structure","examples"],
+  required: ["templateKey","triggerWords","name"],
   additionalProperties: false
 };
 const schema = {
@@ -430,30 +416,17 @@ app.post("/translate", async (req, res) => {
       });
     }
 
-    // ① 整理 grammarPoints:
-    //   匹配模板 → name = 规范模板名(走本地多语言解释)
-    //   没匹配   → name = 模型自己的简短名;同时带 meaning/structure/examples
-    //   两种情况都保留 contextualExamples(贴合当前译文)
+    // ① 整理 grammarPoints(最小引用):
+    //   匹配模板 → name = 规范模板名(App 用本地多语言详解,零成本)
+    //   没匹配   → name = 模型的简短名(App 点开详解时走 /grammar-detail 按需获取)
     if (Array.isArray(parsed.grammarPoints)) {
       parsed.grammarPoints = parsed.grammarPoints.map(g => {
         const tk = (g.templateKey || "").trim();
-        const ctx = Array.isArray(g.contextualExamples) ? g.contextualExamples : [];
         if (tk) {
           const canonical = ALIASES[tk] || tk;
-          return {
-            name: canonical,
-            triggerWords: g.triggerWords || [],
-            contextualExamples: ctx,
-          };
+          return { name: canonical, triggerWords: g.triggerWords || [], isTemplate: true };
         }
-        return {
-          name: g.name || "未命名",
-          triggerWords: g.triggerWords || [],
-          contextualExamples: ctx,
-          meaning: g.meaning || "",
-          structure: g.structure || "",
-          examples: g.examples || []
-        };
+        return { name: g.name || "未命名", triggerWords: g.triggerWords || [], isTemplate: false };
       });
     }
 
@@ -623,9 +596,51 @@ app.post("/translate", async (req, res) => {
   }
 });
 
-// 按需例句:用户点开词详情时才生成,~1-2 秒返回。
-// body: { english, definition?, sourceLanguage, context? }
-// 返回: { en, cn }
+// ============= 月度缓存(例句 / 语法详解) =============
+// 同一个词/语法名,所有用户共享同一份内容 —— 只在第一次被点开时生成一次。
+// 每月 1 号(UTC 月份切换时)整体清空,下次点开重新生成 → 既省 token 又不会永远一成不变。
+// 注:内存缓存,Railway 重启/重新部署也会清空,效果等同提前刷新,无碍。
+const monthKey = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth()}`; };
+let cacheMonth = monthKey();
+const exampleCache = new Map();  // "lang|english" → {en, cn}
+const grammarCache = new Map();  // "lang|grammarName" → {meaning, structure, examples}
+const CACHE_MAX = 30000;
+function cacheSweep() {
+  if (cacheMonth !== monthKey()) {
+    exampleCache.clear();
+    grammarCache.clear();
+    cacheMonth = monthKey();
+  }
+}
+function cachePut(map, key, val) {
+  if (map.size >= CACHE_MAX) map.clear();  // 简单上限保护,防内存膨胀
+  map.set(key, val);
+}
+
+// 调 OpenAI 并取回 content(JSON 字符串),错误时抛带 status 的对象
+async function openAIJSON(body) {
+  let r;
+  try {
+    r = await callOpenAI(body);
+  } catch (e) {
+    if (e.name === "TimeoutError" || e.name === "AbortError") {
+      throw { status: 504, error: "openai_timeout" };
+    }
+    throw e;
+  }
+  if (!r.ok) {
+    const t = await r.text();
+    throw { status: 502, error: "openai_error", detail: t.slice(0, 300) };
+  }
+  const data = await r.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw { status: 502, error: "no_content" };
+  return content;
+}
+
+// 按需例句:用户点开词详情时才生成;同词同语言全用户共享缓存,按月刷新。
+// body: { english, definition?, sourceLanguage }   返回: { en, cn }
+// (不再按 context 定制 —— 缓存的例句对所有人通用)
 const wordExampleSchema = {
   type: "object",
   properties: { en: { type: "string" }, cn: { type: "string" } },
@@ -639,46 +654,99 @@ app.post("/word-example", async (req, res) => {
     if (!OPENAI_API_KEY) {
       return res.status(500).json({ error: "OPENAI_API_KEY not set" });
     }
-    const { english, definition = "", sourceLanguage = "Simplified Chinese", context = "" } = req.body || {};
+    const { english, definition = "", sourceLanguage = "Simplified Chinese" } = req.body || {};
     if (!english || !String(english).trim()) {
       return res.status(400).json({ error: "empty english" });
     }
     const lang = String(sourceLanguage);
+    cacheSweep();
+    const key = `${lang}|${String(english).trim().toLowerCase()}`;
+    const hit = exampleCache.get(key);
+    if (hit) return res.json(hit);
+
     const prompt =
       `You write ONE example sentence for an English-learning app. The learner speaks ${lang}.\n` +
       `Target word/phrase: "${String(english)}"` +
       (definition ? ` (meaning in ${lang}: "${String(definition)}")` : "") + `\n` +
-      (context ? `It appeared in this sentence: "${String(context).slice(0, 160)}" — keep the example loosely on-topic.\n` : "") +
       `Return:\n` +
       `- en: one natural English sentence (8-14 words) that uses "${String(english)}" exactly as given.\n` +
       `- cn: its ${lang} translation. The translation MUST contain the ${lang} rendering of "${String(english)}" — ` +
       `never paraphrase the key word away. Write cn ONLY in ${lang}.`;
-    let r;
-    try {
-      r = await callOpenAI({
-        model: MODEL,
-        temperature: 0.7,
-        messages: [{ role: "user", content: prompt }],
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "word_example", strict: true, schema: wordExampleSchema }
-        }
-      });
-    } catch (e) {
-      if (e.name === "TimeoutError" || e.name === "AbortError") {
-        return res.status(504).json({ error: "openai_timeout" });
+    const content = await openAIJSON({
+      model: MODEL,
+      temperature: 0.7,
+      messages: [{ role: "user", content: prompt }],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "word_example", strict: true, schema: wordExampleSchema }
       }
-      throw e;
-    }
-    if (!r.ok) {
-      const t = await r.text();
-      return res.status(502).json({ error: "openai_error", detail: t.slice(0, 300) });
-    }
-    const data = await r.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return res.status(502).json({ error: "no_content" });
-    res.type("application/json").send(content);
+    });
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { return res.status(502).json({ error: "bad_json" }); }
+    cachePut(exampleCache, key, parsed);
+    res.json(parsed);
   } catch (e) {
+    if (e && e.status) return res.status(e.status).json({ error: e.error, detail: e.detail });
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// 按需语法详解:只有 fallback 语法点(本地无模板)才会调到这里。
+// 模板命中的语法点 App 直接用本地多语言内容,完全不发请求。
+// body: { name, sourceLanguage }   返回: { meaning, structure, examples: [{en,cn}×2] }
+// 同名同语言全用户共享缓存,按月刷新。
+const grammarDetailSchema = {
+  type: "object",
+  properties: {
+    meaning:   { type: "string" },
+    structure: { type: "string" },
+    examples:  { type: "array", items: wordExampleSchema, minItems: 2, maxItems: 2 }
+  },
+  required: ["meaning", "structure", "examples"],
+  additionalProperties: false
+};
+app.post("/grammar-detail", async (req, res) => {
+  try {
+    if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY not set" });
+    }
+    const { name, sourceLanguage = "Simplified Chinese" } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: "empty name" });
+    }
+    const lang = String(sourceLanguage);
+    cacheSweep();
+    const key = `${lang}|${String(name).trim()}`;
+    const hit = grammarCache.get(key);
+    if (hit) return res.json(hit);
+
+    const prompt =
+      `You explain ONE English grammar point for a learner who speaks ${lang}.\n` +
+      `Grammar point: "${String(name)}"\n` +
+      `Return (everything except the en examples written IN ${lang}):\n` +
+      `- meaning: 1-2 sentence explanation of what this structure expresses and when to use it.\n` +
+      `- structure: a one-line pattern with English keywords and ${lang} placeholders ` +
+      `(e.g. "prefer + A + to + B").\n` +
+      `- examples: exactly 2 pairs — en = a natural English sentence using the structure, ` +
+      `cn = its ${lang} translation. The structure's keywords must literally appear in each en sentence.`;
+    const content = await openAIJSON({
+      model: MODEL,
+      temperature: 0.5,
+      messages: [{ role: "user", content: prompt }],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "grammar_detail", strict: true, schema: grammarDetailSchema }
+      }
+    });
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { return res.status(502).json({ error: "bad_json" }); }
+    cachePut(grammarCache, key, parsed);
+    res.json(parsed);
+  } catch (e) {
+    if (e && e.status) return res.status(e.status).json({ error: e.error, detail: e.detail });
     res.status(500).json({ error: String(e) });
   }
 });
