@@ -19,10 +19,26 @@ const POS = ["noun","verb","adjective","adverb","pronoun","preposition","conjunc
 
 function styleDesc(style) {
   switch (style) {
-    case "casual":  return "casual / colloquial spoken";
-    case "formal":  return "formal and polite";
-    case "concise": return "concise and brief";
-    default:        return "standard, natural";
+    case "casual":
+      return "very casual, the way a young native speaker would actually say it to a friend in chat or speech. " +
+        "Use contractions (I'm, you're, don't, won't, gonna, wanna, kinda), informal vocabulary, sentence " +
+        "fragments where natural, and conversational markers (like, you know, hey, yeah). " +
+        "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.' / 'She's such a sweetheart.' " +
+        "AVOID textbook phrasings.";
+    case "formal":
+      return "formal, polished, and polite — the way you would write a professional email or speak in a business " +
+        "setting. NO contractions (use I am, do not, will not). Prefer full vocabulary (would like to, " +
+        "I am afraid that, regarding, indeed). Use complete, well-structured sentences. " +
+        "Examples: 'I am extremely tired today.' / 'Would you care to join me for a film, should you have the time?' / " +
+        "'I am not fond of sea urchin.' / 'She is a remarkably gentle person.'";
+    case "concise":
+      return "as short and punchy as possible while keeping the core meaning. Drop optional words, articles, " +
+        "and subjects when natural. Use the fewest words possible — under 6 words when feasible. " +
+        "Examples: 'So tired today.' / 'Movie later?' / 'Not a fan of sea urchin.' / 'She's super kind.'";
+    default:
+      return "standard, neutral, textbook-natural English — what a typical learner would expect. Balanced, " +
+        "no contractions in writing but not stiff. Examples: 'I am very tired today.' / 'Would you like to " +
+        "watch a movie together?' / 'I do not like sea urchin.' / 'She is a very kind person.'";
   }
 }
 
@@ -31,7 +47,9 @@ function systemPrompt(lang, style) {
     `The user writes in ${lang}; translate it into natural English and annotate it for a ${lang}-speaking learner. ` +
     `Return ONLY JSON matching the schema.\n\n` +
     `Rules:\n` +
-    `- translation: a natural English translation of the input, in a ${styleDesc(style)} style.\n` +
+    `- translation: an English translation of the input, written in the following style: ${styleDesc(style)}\n` +
+    `  Pick wording that is DISTINCTLY different from the other three styles; if the only difference would be ` +
+    `a contraction, push further (different vocabulary, different sentence shape).\n` +
     `- words: split the English translation into meaningful units IN ORDER (single words, or multi-word chunks ` +
     `such as phrasal verbs or grammar structures like "wouldn't have done"). Together the units must cover the ` +
     `whole translation. For each unit:\n` +
