@@ -6,9 +6,20 @@
 //   返回: 直接是 App 需要的结果 JSON(translation / words / grammarPoints)
 
 import express from "express";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+
+// 加载本地 157 + 别名,作为语法模板可选项
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const T = JSON.parse(readFileSync(join(__dirname, "templates.json"), "utf-8"));
+const TEMPLATE_NAMES = T.templates;              // 规范名
+const ALIASES = T.aliases || {};                 // 旧名 → 规范名
+// 给模型看的清单 = 规范名(别名映射在服务端处理,不让模型看到二份)
+const TEMPLATE_ENUM = ["", ...TEMPLATE_NAMES];   // 空 = 「都对不上」
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;                 // ← 在 Railway 里设置
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";          // 可在 Railway 改型号
@@ -83,17 +94,27 @@ function systemPrompt(lang, style) {
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
     `  • isGrammarStructure: true for a multi-word grammar pattern, false for an ordinary vocabulary word.\n` +
     `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
-    `- grammarPoints: 1-3 key grammar structures in this sentence (not more). For each:\n` +
-    `  • name: a short grammar-point name written IN ${lang} (e.g. for Japanese learners use "現在完了形", ` +
-    `for Chinese use "现在完成时", for Spanish use "Pretérito perfecto"). Keep it short — 8 characters or fewer ` +
-    `when feasible.\n` +
-    `  • triggerWords: the English fragments in your translation that trigger this grammar point (e.g. ` +
-    `["have been", "for"] for present perfect continuous).\n` +
-    `  • structure: the abstract pattern, with English keywords and ${lang} placeholders, e.g. ` +
-    `"subject + have/has been + V-ing + for + 时长". Keep it on one line.\n` +
-    `  • meaning: a 1-3 sentence explanation written IN ${lang}, telling the learner when and why to use ` +
-    `this structure.\n` +
-    `  • examples: exactly 2 example sentences — en = English using the structure, cn = the same sentence in ${lang}.\n\n` +
+    `- grammarPoints: 1-3 key grammar structures in this sentence (not more). FOR EACH POINT:\n` +
+    `  STEP 1 — try to pick a templateKey from this fixed list of well-known grammar templates:\n` +
+    `${TEMPLATE_NAMES.map(n => `    "${n}"`).join(",\n")}\n` +
+    `  The list is in Simplified Chinese — it's just an internal ID, the learner sees a localized version. ` +
+    `Choose the SINGLE closest match by MEANING (not by surface form). E.g. when the grammar point is the ` +
+    `present perfect continuous, pick "现在完成进行时"; when it is a second-conditional / hypothetical, pick ` +
+    `"与现在事实相反的虚拟". Use exact characters from the list — case, spacing, punctuation must match.\n` +
+    `  STEP 2 — fill the fields:\n` +
+    `  • templateKey: the chosen list entry. If — and only if — no list entry is a reasonable match, ` +
+    `set templateKey = "" and fill the fallback fields below.\n` +
+    `  • triggerWords: English fragments in your translation that trigger this point.\n` +
+    `  • If templateKey != "" you may leave the fallback fields as empty strings / empty arrays — they ` +
+    `will be replaced by the localized template content on the client. Specifically:\n` +
+    `    – name = "", meaning = "", structure = "", examples = [].\n` +
+    `  • If templateKey == "" (only when truly nothing fits) fill them in ${lang}:\n` +
+    `    – name: a 4-10 character grammar-point name in ${lang}.\n` +
+    `    – structure: one-line pattern (English keywords + ${lang} placeholders).\n` +
+    `    – meaning: 1-2 sentence explanation in ${lang}.\n` +
+    `    – examples: 2 items, en = English using the structure, cn = its ${lang} translation.\n` +
+    `  Picking a templateKey is STRONGLY PREFERRED — try hard before giving up. The list covers almost every ` +
+    `grammar point in everyday English.\n\n` +
     `All definitions and example translations (the cn field) MUST be written in ${lang}, never in any other language.`;
 }
 
@@ -115,16 +136,20 @@ const wordSchema = {
   required: ["english","partOfSpeech","sourceSpan","definition","isGrammarStructure","examples"],
   additionalProperties: false
 };
+// 语法点:优先选本地模板 templateKey;实在选不上才填 fallback 字段
 const grammarSchema = {
   type: "object",
   properties: {
-    name: { type: "string" },
+    // 必须从 157 模板里选;实在不匹配填空串 ""
+    templateKey: { type: "string", enum: TEMPLATE_ENUM },
     triggerWords: { type: "array", items: { type: "string" } },
+    // 以下字段只在 templateKey="" 时才有意义(无匹配模板时的兜底)
+    name: { type: "string" },
     meaning: { type: "string" },
     structure: { type: "string" },
     examples: { type: "array", items: exampleSchema }
   },
-  required: ["name","triggerWords","meaning","structure","examples"],
+  required: ["templateKey","triggerWords","name","meaning","structure","examples"],
   additionalProperties: false
 };
 const schema = {
@@ -188,6 +213,30 @@ app.post("/translate", async (req, res) => {
     // 这里逐一修正,保证结果 JSON 永远是合法对齐。
     let parsed;
     try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
+    // 把 grammarPoints 的 templateKey 转成 App 期望的 name 字段:
+    //   匹配上模板 → name = 规范模板名(走本地多语言解释)
+    //   没匹配上   → name = 模型提供的 fallback 名,meaning/examples 也带上
+    if (Array.isArray(parsed.grammarPoints)) {
+      parsed.grammarPoints = parsed.grammarPoints.map(g => {
+        const tk = (g.templateKey || "").trim();
+        if (tk) {
+          const canonical = ALIASES[tk] || tk;
+          return {
+            name: canonical,
+            triggerWords: g.triggerWords || [],
+            // 不带 fallback 字段,客户端会用本地模板渲染
+          };
+        }
+        // 真无匹配 → 把 fallback 字段都给客户端
+        return {
+          name: g.name || "未命名",
+          triggerWords: g.triggerWords || [],
+          meaning: g.meaning || "",
+          structure: g.structure || "",
+          examples: g.examples || []
+        };
+      });
+    }
     if (Array.isArray(parsed.words)) {
       const src = String(sourceText);
       const fold = s => s.toLowerCase()
