@@ -73,12 +73,16 @@ function styleDesc(style) {
   }
 }
 
-function systemPrompt(lang, style, text = "") {
+// 注意:system prompt 是「按语言静态」的 —— 风格和原文放在 user message 里。
+// 这样长长的规则 + 模板清单成为稳定前缀,自动命中 OpenAI prompt cache(缓存半价),
+// 同一语言的所有请求(含切风格重译)都吃到折扣。
+function systemPrompt(lang) {
   return `You are the translation + linguistic-annotation engine for an English-learning app called "How to Say". ` +
     `The user writes in ${lang}; translate it into natural English and annotate it for a ${lang}-speaking learner. ` +
     `Return ONLY JSON matching the schema.\n\n` +
     `Rules:\n` +
-    `- translation: an English translation of the input, written in the following style: ${styleDesc(style)}\n` +
+    `- translation: an English translation of the input, written in the STYLE specified at the top of the ` +
+    `user message.\n` +
     `  Pick wording that is DISTINCTLY different from the other three styles; if the only difference would be ` +
     `a contraction, push further (different vocabulary, different sentence shape).\n` +
     `- words: split the English translation into meaningful units IN ORDER (single words, or multi-word chunks ` +
@@ -123,6 +127,15 @@ function systemPrompt(lang, style, text = "") {
     `words. For "すきじゃない" → "don't like": "like"="すき", "don't"="じゃない".\n` +
     `    G. Self-check before returning: every non-empty sourceSpan must satisfy ` +
     `(sourceText.includes(sourceSpan) === true). If not, set it to "".\n` +
+    `    H. Politeness / hedging scaffolding that you ADDED in English (e.g. "I am afraid that", "I think", ` +
+    `"I would say", "please note", "you see") has NO source counterpart → its sourceSpan MUST be "". ` +
+    `NEVER let such a phrase absorb source words that belong to the content units. ` +
+    `Example (formal Japanese): 鼻が壊れちゃいそう — WRONG: "I am afraid that"="鼻が壊れちゃいそう" with ` +
+    `"my nose"="" and "might break"=""; RIGHT: "I am afraid that"="", "my nose"="鼻", "might break"="壊れちゃいそう". ` +
+    `This applies to EVERY source language: each source content word must be claimed by the unit that actually ` +
+    `translates it, and added English filler claims nothing. ` +
+    `(Exception: when the source itself contains the hedge — Chinese "恐怕"→"I'm afraid", Japanese "と思う"→"I think" — ` +
+    `then mapping it IS correct.)\n` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
     `  • definition: the equivalent ${lang} word or expression. KEEP IT AS SHORT AS POSSIBLE — ideally just ` +
@@ -221,7 +234,7 @@ function systemPrompt(lang, style, text = "") {
     `["as", "soon", "as"] for "as soon as"; ["had", "better"] for "had better". ` +
     `Every triggerWord must be literally present in your translation.\n` +
     `  • contextualExamples: ALWAYS REQUIRED. Provide exactly 2 fresh example sentences that use this ` +
-    `grammar point in a context that fits THIS user's topic (here: "${text.slice(0,80)}"). ` +
+    `grammar point in a context that fits the topic of the user's sentence. ` +
     `Do NOT recycle generic examples about unrelated topics. en = the English example, cn = its ${lang} translation.\n` +
     `  • If templateKey != "": leave the fallback fields empty (name="", meaning="", structure="", examples=[]).\n` +
     `  • If templateKey == "": fill all four fallback fields IN ${lang}:\n` +
@@ -303,8 +316,8 @@ app.post("/translate", async (req, res) => {
       model: MODEL,
       temperature: 0.3,
       messages: [
-        { role: "system", content: systemPrompt(sourceLanguage, style, String(sourceText)) },
-        { role: "user", content: String(sourceText) }
+        { role: "system", content: systemPrompt(sourceLanguage) },
+        { role: "user", content: `STYLE: ${styleDesc(style)}\n\nTranslate this ${sourceLanguage} text:\n${String(sourceText)}` }
       ],
       response_format: {
         type: "json_schema",
@@ -366,6 +379,13 @@ app.post("/translate", async (req, res) => {
         if (!f) return false;
         return new RegExp(`(^|[^A-Za-z])${escapeRe(f)}([^A-Za-z]|$)`, "i").test(translation);
       };
+      // 模板名关键词允许常见词形变化(agree→agreed/agrees/agreeing),
+      // 避免译文用了变位形式时误丢正确的模板
+      const kwInTranslation = (kw) => {
+        const f = String(kw).trim();
+        if (!f) return false;
+        return new RegExp(`(^|[^A-Za-z])${escapeRe(f)}(s|es|d|ed|ing)?([^A-Za-z]|$)`, "i").test(translation);
+      };
       // 模板名里的占位符 / 泛指词,不算「具体关键词」
       const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc"]);
       parsed.grammarPoints = parsed.grammarPoints.filter(g => {
@@ -378,7 +398,7 @@ app.post("/translate", async (req, res) => {
           .map(s => s.toLowerCase())
           .filter(s => !PLACEHOLDER.has(s));
         // 名字里有具体英文词(如 really / prefer / had better)但译文一个都没出现 → 配错了,丢弃
-        if (keywords.length > 0 && !keywords.some(inTranslation)) return false;
+        if (keywords.length > 0 && !keywords.some(kwInTranslation)) return false;
         // 触发词全军覆没(译文里一个都找不到)→ 同样视为配错
         if (!Array.isArray(g.triggerWords) || g.triggerWords.length === 0) return false;
         return true;
