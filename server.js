@@ -42,13 +42,15 @@ function systemPrompt(lang, style) {
     `"sea urchin", sourceSpan MUST be "うに" — never another word at the same position. ` +
     `For Japanese particles like は/が/を/に, Chinese 的/了/吗, etc. that have NO English counterpart, the unit ` +
     `should NOT appear in the words list at all (just skip them in alignment). ` +
-    `When the English unit has NO real counterpart in the source — e.g. an added pronoun I/you/he because ` +
-    `Japanese/Spanish/Chinese omitted the subject, an English article a/an/the with no source word, or an ` +
-    `auxiliary do/does/did inserted only for grammar — sourceSpan MUST be the empty string "". ` +
-    `It is WRONG to reuse some unrelated source word just to fill the field; leave it "" instead. ` +
+    `If the source DOES contain a word for this English unit, you MUST map to it — e.g. Chinese "我"→"I", ` +
+    `"不"→"don't"/"not", Spanish "yo"→"I". Only use sourceSpan="" when the source TRULY omits the meaning — ` +
+    `e.g. Japanese drops subjects, so a "うにはすきじゃない" → "I" gets sourceSpan="". ` +
+    `Also "" for English-only insertions: articles a/an/the without a source word, dummy do/does/did inserted ` +
+    `purely for grammar, or "to" in "want to". NEVER reuse an unrelated source word just to fill the field. ` +
+    `Source particles with no meaning of their own (Japanese は/が/を/に/で, Chinese 的/了/吗) should NOT be ` +
+    `targeted by any English unit — leave them unaligned. ` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
-    `therefore appear in any order across the source text, and the same source span may be referenced by ` +
-    `more than one English unit if they translate the same idea.\n` +
+    `therefore appear in any order across the source text.\n` +
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
     `  • isGrammarStructure: true for a multi-word grammar pattern, false for an ordinary vocabulary word.\n` +
     `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
