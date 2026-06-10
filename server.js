@@ -185,21 +185,6 @@ function systemPrompt(lang) {
     `For ordinary single-word vocabulary — common nouns, verbs, adjectives, adverbs, including inflected forms ` +
     `like "stinks", "farts", "ran", "beautifully", "happier" — isGrammarStructure MUST be false. ` +
     `If in doubt, set false. Single content words are never grammar structures.\n` +
-    `  • examples: exactly one example — en = an English sentence using the unit, ` +
-    `cn = its ${lang} translation. The cn MUST contain a translation of THIS unit's meaning; ` +
-    `do NOT paraphrase the sentence in a way that drops the word. This rule applies UNIFORMLY ACROSS ALL ` +
-    `target languages. The key word must survive translation.\n` +
-    `    Examples — for en = "He always blames his farts on the dog", correct cn in each language:\n` +
-    `      ja: "彼はいつもおならを犬のせいにする"   (NOT "彼はいつも犬のせいにする" — おなら 不见了)\n` +
-    `      zh: "他总是把自己的屁怪在狗身上"        (NOT "他总是怪狗" — 没了"屁")\n` +
-    `      ko: "그는 항상 자기 방귀를 개 탓으로 돌린다"  (NOT "그는 항상 개 탓을 한다")\n` +
-    `      es: "Siempre les echa la culpa de sus pedos al perro"  (NOT "Siempre culpa al perro")\n` +
-    `      pt: "Ele sempre joga a culpa dos peidos no cachorro"   (NOT "Ele sempre culpa o cachorro")\n` +
-    `      hi: "वह हमेशा अपने पाद का दोष कुत्ते पर डालता है"  (NOT "वह हमेशा कुत्ते पर दोष डालता है")\n` +
-    `      vi: "Anh ấy luôn đổ lỗi rắm của mình cho con chó"  (NOT "Anh ấy luôn đổ lỗi cho con chó")\n` +
-    `      id: "Dia selalu menyalahkan kentutnya pada anjing"  (NOT "Dia selalu menyalahkan anjing")\n` +
-    `    If you cannot fit the word naturally, REWRITE en to a sentence where you can — never drop the key word ` +
-    `from cn.\n` +
     `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). For each:\n` +
     `\n` +
     `  STEP 1 — identify the grammar by inspecting YOUR ENGLISH TRANSLATION, not the user's source.\n` +
@@ -267,6 +252,8 @@ const exampleSchema = {
   properties: { en: { type: "string" }, cn: { type: "string" } },
   required: ["en", "cn"], additionalProperties: false
 };
+// 注意:words 里不再带 examples —— 例句改为用户点开词详情时按需生成(/word-example),
+// 这让 /translate 的输出体量减半以上,从根本上消除超时;也只为用户真正查看的词花例句的钱。
 const wordSchema = {
   type: "object",
   properties: {
@@ -274,10 +261,9 @@ const wordSchema = {
     partOfSpeech: { type: "string", enum: POS },
     sourceSpan: { type: "string" },
     definition: { type: "string" },
-    isGrammarStructure: { type: "boolean" },
-    examples: { type: "array", items: exampleSchema }
+    isGrammarStructure: { type: "boolean" }
   },
-  required: ["english","partOfSpeech","sourceSpan","definition","isGrammarStructure","examples"],
+  required: ["english","partOfSpeech","sourceSpan","definition","isGrammarStructure"],
   additionalProperties: false
 };
 // 语法点:能精准匹配本地模板就用,否则模型自己写完整解释
@@ -316,6 +302,27 @@ const schema = {
 // 健康检查
 app.get("/", (_req, res) => res.send("How to Say proxy: OK"));
 
+// 调 OpenAI 的统一封装:
+//   · 55 秒硬超时(App 端 60 秒,留 5 秒余量)—— OpenAI 偶发挂起时快速失败,而不是无限转圈
+//   · 网络层错误(连接重置等)立刻重试一次;HTTP 错误码不重试
+async function callOpenAI(body) {
+  const doFetch = () => fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(55_000)
+  });
+  try {
+    return await doFetch();
+  } catch (e) {
+    if (e.name === "TimeoutError" || e.name === "AbortError") throw e; // 超时不重试,直接报错
+    return await doFetch(); // 瞬时网络错误重试一次
+  }
+}
+
 app.post("/translate", async (req, res) => {
   try {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -342,14 +349,15 @@ app.post("/translate", async (req, res) => {
       }
     };
 
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify(body)
-    });
+    let r;
+    try {
+      r = await callOpenAI(body);
+    } catch (e) {
+      if (e.name === "TimeoutError" || e.name === "AbortError") {
+        return res.status(504).json({ error: "openai_timeout" });
+      }
+      throw e;
+    }
 
     if (!r.ok) {
       const t = await r.text();
@@ -585,7 +593,74 @@ app.post("/translate", async (req, res) => {
       }
       if (fixCount > 0 && process.env.LOG_FIXUPS) console.log(`fixed ${fixCount} spans`);
     }
+    // 兼容字段:words[].examples 不再由模型生成(按需走 /word-example),
+    // 但已安装的旧版 App 解码时要求该字段存在 → 统一补空数组
+    if (Array.isArray(parsed.words)) {
+      for (const w of parsed.words) {
+        if (w && !Array.isArray(w.examples)) w.examples = [];
+      }
+    }
     res.json(parsed);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// 按需例句:用户点开词详情时才生成,~1-2 秒返回。
+// body: { english, definition?, sourceLanguage, context? }
+// 返回: { en, cn }
+const wordExampleSchema = {
+  type: "object",
+  properties: { en: { type: "string" }, cn: { type: "string" } },
+  required: ["en", "cn"], additionalProperties: false
+};
+app.post("/word-example", async (req, res) => {
+  try {
+    if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY not set" });
+    }
+    const { english, definition = "", sourceLanguage = "Simplified Chinese", context = "" } = req.body || {};
+    if (!english || !String(english).trim()) {
+      return res.status(400).json({ error: "empty english" });
+    }
+    const lang = String(sourceLanguage);
+    const prompt =
+      `You write ONE example sentence for an English-learning app. The learner speaks ${lang}.\n` +
+      `Target word/phrase: "${String(english)}"` +
+      (definition ? ` (meaning in ${lang}: "${String(definition)}")` : "") + `\n` +
+      (context ? `It appeared in this sentence: "${String(context).slice(0, 160)}" — keep the example loosely on-topic.\n` : "") +
+      `Return:\n` +
+      `- en: one natural English sentence (8-14 words) that uses "${String(english)}" exactly as given.\n` +
+      `- cn: its ${lang} translation. The translation MUST contain the ${lang} rendering of "${String(english)}" — ` +
+      `never paraphrase the key word away. Write cn ONLY in ${lang}.`;
+    let r;
+    try {
+      r = await callOpenAI({
+        model: MODEL,
+        temperature: 0.7,
+        messages: [{ role: "user", content: prompt }],
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "word_example", strict: true, schema: wordExampleSchema }
+        }
+      });
+    } catch (e) {
+      if (e.name === "TimeoutError" || e.name === "AbortError") {
+        return res.status(504).json({ error: "openai_timeout" });
+      }
+      throw e;
+    }
+    if (!r.ok) {
+      const t = await r.text();
+      return res.status(502).json({ error: "openai_error", detail: t.slice(0, 300) });
+    }
+    const data = await r.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return res.status(502).json({ error: "no_content" });
+    res.type("application/json").send(content);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
