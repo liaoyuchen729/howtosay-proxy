@@ -53,7 +53,7 @@ function styleDesc(style) {
   }
 }
 
-function systemPrompt(lang, style) {
+function systemPrompt(lang, style, text = "") {
   return `You are the translation + linguistic-annotation engine for an English-learning app called "How to Say". ` +
     `The user writes in ${lang}; translate it into natural English and annotate it for a ${lang}-speaking learner. ` +
     `Return ONLY JSON matching the schema.\n\n` +
@@ -94,27 +94,35 @@ function systemPrompt(lang, style) {
     `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
     `  • isGrammarStructure: true for a multi-word grammar pattern, false for an ordinary vocabulary word.\n` +
     `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
-    `- grammarPoints: 1-3 key grammar structures in this sentence (not more). FOR EACH POINT:\n` +
-    `  STEP 1 — try to pick a templateKey from this fixed list of well-known grammar templates:\n` +
+    `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). For each:\n` +
+    `\n` +
+    `  STEP 1 — identify what the grammar point actually is for THIS sentence.\n` +
+    `\n` +
+    `  STEP 2 — try to match it to ONE entry in this list of 164 well-known grammar templates ` +
+    `(internal IDs in Simplified Chinese, learner sees a localized version):\n` +
     `${TEMPLATE_NAMES.map(n => `    "${n}"`).join(",\n")}\n` +
-    `  The list is in Simplified Chinese — it's just an internal ID, the learner sees a localized version. ` +
-    `Choose the SINGLE closest match by MEANING (not by surface form). E.g. when the grammar point is the ` +
-    `present perfect continuous, pick "现在完成进行时"; when it is a second-conditional / hypothetical, pick ` +
-    `"与现在事实相反的虚拟". Use exact characters from the list — case, spacing, punctuation must match.\n` +
-    `  STEP 2 — fill the fields:\n` +
-    `  • templateKey: the chosen list entry. If — and only if — no list entry is a reasonable match, ` +
-    `set templateKey = "" and fill the fallback fields below.\n` +
-    `  • triggerWords: English fragments in your translation that trigger this point.\n` +
-    `  • If templateKey != "" you may leave the fallback fields as empty strings / empty arrays — they ` +
-    `will be replaced by the localized template content on the client. Specifically:\n` +
-    `    – name = "", meaning = "", structure = "", examples = [].\n` +
-    `  • If templateKey == "" (only when truly nothing fits) fill them in ${lang}:\n` +
-    `    – name: a 4-10 character grammar-point name in ${lang}.\n` +
-    `    – structure: one-line pattern (English keywords + ${lang} placeholders).\n` +
-    `    – meaning: 1-2 sentence explanation in ${lang}.\n` +
-    `    – examples: 2 items, en = English using the structure, cn = its ${lang} translation.\n` +
-    `  Picking a templateKey is STRONGLY PREFERRED — try hard before giving up. The list covers almost every ` +
-    `grammar point in everyday English.\n\n` +
+    `\n` +
+    `  CRITICAL — only pick a templateKey if there is a TRULY EXACT semantic match (95%+ overlap). ` +
+    `If your grammar point is e.g. "prefer X to Y", "would rather", "had better", "so ... that", ` +
+    `"too ... to", "the more ... the more", "way + comparative", "have something done", or any other ` +
+    `fixed expression / collocation NOT in the list, set templateKey = "" and DO NOT pick a vaguely ` +
+    `similar entry. Picking a wrong template is WORSE than picking none. ` +
+    `Surface similarity (e.g. "比起意面我更喜欢寿司" looks comparative) is NOT enough — match by EXACT ` +
+    `grammar structure, not by surface vibes.\n` +
+    `\n` +
+    `  STEP 3 — fill the fields:\n` +
+    `  • templateKey: the chosen list entry, or "" if no perfect match.\n` +
+    `  • triggerWords: the English fragments in your translation that trigger this point ` +
+    `(e.g. ["prefer", "to"] for "prefer X to Y"; ["way", "more"] for "way more than").\n` +
+    `  • contextualExamples: ALWAYS REQUIRED. Provide exactly 2 fresh example sentences that use this ` +
+    `grammar point in a context that fits THIS user's topic (here: "${text.slice(0,80)}"). ` +
+    `Do NOT recycle generic examples about unrelated topics. en = the English example, cn = its ${lang} translation.\n` +
+    `  • If templateKey != "": leave the fallback fields empty (name="", meaning="", structure="", examples=[]).\n` +
+    `  • If templateKey == "": fill all four fallback fields IN ${lang}:\n` +
+    `    – name: a short grammar-point name (e.g. "prefer X to Y 句型").\n` +
+    `    – structure: one-line pattern with English keywords and ${lang} placeholders.\n` +
+    `    – meaning: 1-2 sentence explanation.\n` +
+    `    – examples: 2 additional generic example pairs.\n\n` +
     `All definitions and example translations (the cn field) MUST be written in ${lang}, never in any other language.`;
 }
 
@@ -136,20 +144,27 @@ const wordSchema = {
   required: ["english","partOfSpeech","sourceSpan","definition","isGrammarStructure","examples"],
   additionalProperties: false
 };
-// 语法点:优先选本地模板 templateKey;实在选不上才填 fallback 字段
+// 语法点:能精准匹配本地模板就用,否则模型自己写完整解释
 const grammarSchema = {
   type: "object",
   properties: {
-    // 必须从 157 模板里选;实在不匹配填空串 ""
+    // 模板 ID(来自 164 模板清单);不匹配填 ""
     templateKey: { type: "string", enum: TEMPLATE_ENUM },
+    // 必填:本句英文里触发这个语法的片段
     triggerWords: { type: "array", items: { type: "string" } },
-    // 以下字段只在 templateKey="" 时才有意义(无匹配模板时的兜底)
+    // 必填:针对本句话题(不是模板的死例句)的 2 条新鲜例句
+    contextualExamples: {
+      type: "array",
+      items: exampleSchema,
+      minItems: 2, maxItems: 2
+    },
+    // 当 templateKey=="" 时必须填的完整解释字段
     name: { type: "string" },
     meaning: { type: "string" },
     structure: { type: "string" },
     examples: { type: "array", items: exampleSchema }
   },
-  required: ["templateKey","triggerWords","name","meaning","structure","examples"],
+  required: ["templateKey","triggerWords","contextualExamples","name","meaning","structure","examples"],
   additionalProperties: false
 };
 const schema = {
@@ -182,7 +197,7 @@ app.post("/translate", async (req, res) => {
       model: MODEL,
       temperature: 0.3,
       messages: [
-        { role: "system", content: systemPrompt(sourceLanguage, style) },
+        { role: "system", content: systemPrompt(sourceLanguage, style, String(sourceText)) },
         { role: "user", content: String(sourceText) }
       ],
       response_format: {
@@ -213,29 +228,49 @@ app.post("/translate", async (req, res) => {
     // 这里逐一修正,保证结果 JSON 永远是合法对齐。
     let parsed;
     try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
-    // 把 grammarPoints 的 templateKey 转成 App 期望的 name 字段:
-    //   匹配上模板 → name = 规范模板名(走本地多语言解释)
-    //   没匹配上   → name = 模型提供的 fallback 名,meaning/examples 也带上
+    // ① 整理 grammarPoints:
+    //   匹配模板 → name = 规范模板名(走本地多语言解释)
+    //   没匹配   → name = 模型自己的简短名;同时带 meaning/structure/examples
+    //   两种情况都保留 contextualExamples(贴合当前译文)
     if (Array.isArray(parsed.grammarPoints)) {
       parsed.grammarPoints = parsed.grammarPoints.map(g => {
         const tk = (g.templateKey || "").trim();
+        const ctx = Array.isArray(g.contextualExamples) ? g.contextualExamples : [];
         if (tk) {
           const canonical = ALIASES[tk] || tk;
           return {
             name: canonical,
             triggerWords: g.triggerWords || [],
-            // 不带 fallback 字段,客户端会用本地模板渲染
+            contextualExamples: ctx,
           };
         }
-        // 真无匹配 → 把 fallback 字段都给客户端
         return {
           name: g.name || "未命名",
           triggerWords: g.triggerWords || [],
+          contextualExamples: ctx,
           meaning: g.meaning || "",
           structure: g.structure || "",
           examples: g.examples || []
         };
       });
+    }
+
+    // ② 服务端兜底:words 里凡是出现在某 grammarPoint.triggerWords 的英文片段,
+    //    强制改 isGrammarStructure=true(避免下划线/收藏按钮判断错乱)
+    if (Array.isArray(parsed.words) && Array.isArray(parsed.grammarPoints)) {
+      const triggerSet = new Set();
+      for (const g of parsed.grammarPoints) {
+        for (const t of (g.triggerWords || [])) {
+          triggerSet.add(String(t).trim().toLowerCase());
+        }
+      }
+      for (const w of parsed.words) {
+        if (!w || typeof w.english !== "string") continue;
+        const e = w.english.trim().toLowerCase();
+        if (triggerSet.has(e)) {
+          w.isGrammarStructure = true;
+        }
+      }
     }
     if (Array.isArray(parsed.words)) {
       const src = String(sourceText);
