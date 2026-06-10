@@ -111,9 +111,26 @@ function systemPrompt(lang, style, text = "") {
     `(sourceText.includes(sourceSpan) === true). If not, set it to "".\n` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
-    `  • definition: a short, learner-friendly explanation written IN ${lang}.\n` +
-    `  • isGrammarStructure: true for a multi-word grammar pattern, false for an ordinary vocabulary word.\n` +
-    `  • examples: exactly one example — en = an English sentence using the unit, cn = its ${lang} translation.\n` +
+    `  • definition: the equivalent ${lang} word or expression. KEEP IT AS SHORT AS POSSIBLE — ideally just ` +
+    `the word itself. Strictly FORBIDDEN: meta-phrasings that wrap the meaning, such as ` +
+    `"Xのこと" / "Xという意味" / "Xを意味する" / "X的意思" / "X的事情" / "意为X" / "指的是X" / ` +
+    `"means X" / "refers to X" / Spanish "que significa X" / Portuguese "significa X" / Hindi "का अर्थ है X". ` +
+    `Also FORBIDDEN: redundant descriptive padding like Japanese "海に住むうに(sea urchin that lives in the sea)" ` +
+    `or "犬という動物". Just write the bare equivalent. Examples (Japanese): farts → "おなら" (NOT "おならのこと"); ` +
+    `stinks → "臭い" (NOT "臭いがする、という意味"); sea urchin → "うに" (NOT "海に住むうに"); fast → "速い" ` +
+    `(NOT "速いという意味"). The definition is at most ONE short clause; if you find yourself writing more than ` +
+    `~8 characters in CJK or ~6 words in others, you are over-explaining.\n` +
+    `  • isGrammarStructure: true ONLY when this unit is itself a MULTI-WORD grammar pattern such as ` +
+    `"had better", "wouldn't have done", "be supposed to", "prefer X to Y", "to go" (the infinitive marker). ` +
+    `For ordinary single-word vocabulary — common nouns, verbs, adjectives, adverbs, including inflected forms ` +
+    `like "stinks", "farts", "ran", "beautifully", "happier" — isGrammarStructure MUST be false. ` +
+    `If in doubt, set false. Single content words are never grammar structures.\n` +
+    `  • examples: exactly one example — en = an English sentence using the unit, ` +
+    `cn = its ${lang} translation. The cn MUST contain a translation of THIS unit's meaning; ` +
+    `do NOT paraphrase the sentence in a way that drops the word. E.g. for en = "He always blames his farts ` +
+    `on the dog", the Japanese cn MUST include "おなら" (something like "彼はいつもおならを犬のせいにする") — ` +
+    `it is wrong to translate as "彼はいつも犬のせいにする" because the key word disappears. ` +
+    `If you cannot fit the word naturally, rewrite the en sentence to one where you can.\n` +
     `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). For each:\n` +
     `\n` +
     `  STEP 1 — identify the grammar by inspecting YOUR ENGLISH TRANSLATION, not the user's source.\n` +
@@ -316,18 +333,32 @@ app.post("/translate", async (req, res) => {
 
     // ② 服务端兜底:words 里凡是出现在某 grammarPoint.triggerWords 的英文片段,
     //    强制改 isGrammarStructure=true(避免下划线/收藏按钮判断错乱)
+    //    —— 但只对「真·多词语法模式」生效:triggerWords.length >= 2(如 ["prefer","to"]、["had","better"])。
+    //    单 trigger 的情况(如某模板只标出一个动词)不翻 flag,否则会把普通动词/形容词错标成语法。
     if (Array.isArray(parsed.words) && Array.isArray(parsed.grammarPoints)) {
       const triggerSet = new Set();
       for (const g of parsed.grammarPoints) {
-        for (const t of (g.triggerWords || [])) {
+        const tw = Array.isArray(g.triggerWords) ? g.triggerWords : [];
+        if (tw.length < 2) continue;  // 单 trigger 不算多词语法
+        for (const t of tw) {
           triggerSet.add(String(t).trim().toLowerCase());
         }
       }
+      // 同时:对单词单位强制 false(不论模型给的什么)
+      // 规则:english 不含空格 + 不是已知的多词缩写 → 视为单词,isGrammarStructure 必为 false
+      // 但若它出现在 triggerSet 里(多词语法的一部分),允许翻 true
       for (const w of parsed.words) {
         if (!w || typeof w.english !== "string") continue;
         const e = w.english.trim().toLowerCase();
         if (triggerSet.has(e)) {
           w.isGrammarStructure = true;
+          continue;
+        }
+        // 单 token(无空格)且词性是普通词 → 强制 false
+        const isSingleToken = !/\s/.test(e);
+        const contentPOS = new Set(["noun","verb","adjective","adverb"]);
+        if (isSingleToken && contentPOS.has(w.partOfSpeech)) {
+          w.isGrammarStructure = false;
         }
       }
     }
@@ -337,8 +368,29 @@ app.post("/translate", async (req, res) => {
         .normalize("NFD").replace(/[̀-ͯ]/g, "");  // 去重音
       const srcFolded = fold(src);
       let fixCount = 0;
+      // 只是助词 / 标点 / 空白 的 sourceSpan 全部置空,
+      // 避免染色染到"看起来跟英文词无关"的字符上(例:It's 染到 「は」)。
+      // 同时凡是 sourceSpan 跟 english 一模一样(看似抄回去)→ 多半是模型偷懒,也置空。
+      const PARTICLE_ONLY = /^[\s。、，,.\?\!？！…・·~〜「」『』""''()()\-—–]*$/;
+      const JP_PARTICLES = new Set(["は","が","を","に","で","と","も","から","まで","へ","の","や","ね","よ","か","な","ば","ぞ","ぜ"]);
+      const ZH_PARTICLES = new Set(["的","了","吗","呢","吧","啊","哦","哈","嘛","呐"]);
+      const KO_PARTICLES = new Set(["은","는","이","가","을","를","에","에서","의","와","과","도","만","로","으로"]);
+      const isParticleOnly = (sp) => {
+        const t = sp.trim();
+        if (t === "") return true;
+        if (PARTICLE_ONLY.test(t)) return true;
+        if (JP_PARTICLES.has(t)) return true;
+        if (ZH_PARTICLES.has(t)) return true;
+        if (KO_PARTICLES.has(t)) return true;
+        return false;
+      };
       for (const w of parsed.words) {
         if (!w || typeof w.sourceSpan !== "string" || w.sourceSpan === "") continue;
+        if (isParticleOnly(w.sourceSpan)) {
+          w.sourceSpan = "";
+          fixCount++;
+          continue;
+        }
         const span = w.sourceSpan;
         if (src.includes(span)) continue;   // ✓ 已经是真子串
         // 尝试同形不同 case / 去重音匹配,取回源文里实际出现的形式
