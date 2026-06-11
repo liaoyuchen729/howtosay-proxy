@@ -401,7 +401,9 @@ app.post("/translate", async (req, res) => {
         }
         const tk = (g.templateKey || "").trim();
         if (!tk) return true;  // 模型自答的 fallback 不在此校验范围
-        const keywords = (tk.match(/[A-Za-z']{3,}/g) || [])
+        // 阈值 ≥2 字母:"as if / as though" 这类模板名里 as/if 都是 2 字母,
+        // 用 ≥3 会只提出 though,译文用 "as if" 时被误杀(真实事故)
+        const keywords = (tk.match(/[A-Za-z']{2,}/g) || [])
           .map(s => s.toLowerCase())
           .filter(s => !PLACEHOLDER.has(s));
         // 名字里有具体英文词(如 really / prefer / had better)但译文一个都没出现 → 配错了,丢弃
@@ -499,6 +501,36 @@ app.post("/translate", async (req, res) => {
         }
       }
     }
+
+    // ②.5 一致性兜底(不变式:词对齐里有下划线的语法块 ⇔ 语法详解里有对应条目):
+    //    多词语法块(isGrammarStructure=true)若没有任何语法点覆盖它
+    //    (模型漏报 / 校验误杀),服务端补一条:
+    //    · 模板名包含该块(如 "as if" ⊂ "as if / as though + 从句")→ 补模板点,App 走本地详解零成本
+    //    · 否则 → 补 fallback 点,名字就是块本身,App 点开详解时走 /grammar-detail
+    if (Array.isArray(parsed.words) && Array.isArray(parsed.grammarPoints)) {
+      const norm = s => String(s).trim().toLowerCase();
+      for (const w of parsed.words) {
+        if (!w || !w.isGrammarStructure || typeof w.english !== "string") continue;
+        const chunk = norm(w.english);
+        if (!chunk) continue;
+        const chunkTokens = chunk.split(/\s+/);
+        const covered = parsed.grammarPoints.some(g => {
+          const trigs = (g.triggerWords || []).map(norm);
+          if (trigs.includes(chunk)) return true;                       // 整块就是触发词
+          return chunkTokens.every(tok => trigs.includes(tok));         // 块内每个词都被触发词覆盖
+        });
+        if (covered) continue;
+        // 找名字里包含该块的模板(词边界匹配,避免 "to do" 误配进无关名)
+        const re = new RegExp(`(^|[^A-Za-z])${chunk.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z]|$)`, "i");
+        const tpl = TEMPLATE_NAMES.find(n => re.test(n));
+        if (tpl) {
+          parsed.grammarPoints.push({ name: tpl, triggerWords: [w.english.trim()], isTemplate: true });
+        } else {
+          parsed.grammarPoints.push({ name: w.english.trim(), triggerWords: [w.english.trim()], isTemplate: false });
+        }
+      }
+    }
+
     if (Array.isArray(parsed.words)) {
       const src = String(sourceText);
       const fold = s => s.toLowerCase()
