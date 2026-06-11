@@ -386,28 +386,57 @@ app.post("/translate", async (req, res) => {
         if (!f) return false;
         return new RegExp(`(^|[^A-Za-z])${escapeRe(f)}([^A-Za-z]|$)`, "i").test(translation);
       };
-      // 模板名关键词允许常见词形变化(agree→agreed/agrees/agreeing),
-      // 避免译文用了变位形式时误丢正确的模板
-      const kwInTranslation = (kw) => {
-        const f = String(kw).trim();
-        if (!f) return false;
-        return new RegExp(`(^|[^A-Za-z])${escapeRe(f)}(s|es|d|ed|ing)?([^A-Za-z]|$)`, "i").test(translation);
+      // ===== 词组级模板校验 =====
+      // 模板名里嵌的是英文【词组】(可能带 / 分隔的备选):
+      //   "as if / as though + 从句" → 备选 ["as if"] 和 ["as though"],任一完整出现即可
+      //   "if only(但願)"           → 词组 "if only" 必须【连续】出现,单独的 if 不算
+      // 教训:逐词 any-match 两头都错 —— 阈值高了误杀 as if,低了放过 if only。
+      // 模板名里的占位符 / 泛指词,断开词组、不参与匹配
+      const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc","do","doing","done","x","y"]);
+      // 把一个备选段切成若干「连续英文词组」(占位符和中文把词组断开)
+      const phraseRuns = (segment) => {
+        const runs = [];
+        let cur = [];
+        const re = /[A-Za-z']+/g;
+        let m, lastEnd = -1;
+        while ((m = re.exec(segment)) !== null) {
+          const tok = m[0];
+          const adjacent = lastEnd >= 0 && /^\s*$/.test(segment.slice(lastEnd, m.index));
+          if (PLACEHOLDER.has(tok.toLowerCase())) {
+            if (cur.length) { runs.push(cur); cur = []; }
+          } else if (adjacent && cur.length) {
+            cur.push(tok);
+          } else {
+            if (cur.length) runs.push(cur);
+            cur = [tok];
+          }
+          lastEnd = m.index + tok.length;
+        }
+        if (cur.length) runs.push(cur);
+        return runs;
       };
-      // 模板名里的占位符 / 泛指词,不算「具体关键词」
-      const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc"]);
+      // 词组是否连续出现在译文里(整词边界;be 兼容变位;每个词容忍常见后缀变化)
+      const phraseInTranslation = (run) => {
+        const toks = run.map(t => {
+          if (t.toLowerCase() === "be") return "(?:be|is|am|are|was|were|been|being)";
+          return escapeRe(t) + "(?:s|es|d|ed|ing)?";
+        });
+        return new RegExp(`(^|[^A-Za-z])${toks.join("\\s+")}([^A-Za-z]|$)`, "i").test(translation);
+      };
+      // 模板名校验:按 / 切备选;只要有一个备选的【全部】词组都出现 → 通过
+      const templateMatchesTranslation = (name) => {
+        const alts = String(name).split("/").map(phraseRuns);
+        if (!alts.some(a => a.length > 0)) return true;  // 纯中文名,无英文词组可查
+        return alts.some(a => a.length > 0 && a.every(phraseInTranslation));
+      };
       parsed.grammarPoints = parsed.grammarPoints.filter(g => {
         if (Array.isArray(g.triggerWords)) {
           g.triggerWords = g.triggerWords.filter(inTranslation);
         }
         const tk = (g.templateKey || "").trim();
         if (!tk) return true;  // 模型自答的 fallback 不在此校验范围
-        // 阈值 ≥2 字母:"as if / as though" 这类模板名里 as/if 都是 2 字母,
-        // 用 ≥3 会只提出 though,译文用 "as if" 时被误杀(真实事故)
-        const keywords = (tk.match(/[A-Za-z']{2,}/g) || [])
-          .map(s => s.toLowerCase())
-          .filter(s => !PLACEHOLDER.has(s));
-        // 名字里有具体英文词(如 really / prefer / had better)但译文一个都没出现 → 配错了,丢弃
-        if (keywords.length > 0 && !keywords.some(kwInTranslation)) return false;
+        // 模板名的英文词组必须在译文里连续出现,否则配错丢弃
+        if (!templateMatchesTranslation(tk)) return false;
         // 触发词全军覆没(译文里一个都找不到)→ 同样视为配错
         if (!Array.isArray(g.triggerWords) || g.triggerWords.length === 0) return false;
         return true;
@@ -494,10 +523,20 @@ app.post("/translate", async (req, res) => {
     //      凡出现在语法解说里的触发词(哪怕只有一个,如 might),词块一律划线,
     //      和语法解说严格一致。服务端不再为下划线翻任何 flag。
     if (Array.isArray(parsed.words)) {
+      const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       for (const w of parsed.words) {
         if (!w || typeof w.english !== "string") continue;
-        if (!/\s/.test(w.english.trim())) {
+        const eng = w.english.trim();
+        if (!/\s/.test(eng)) {
           w.isGrammarStructure = false;
+        } else if (!w.isGrammarStructure) {
+          // 多词单元出现在某个模板名里("as if" ⊂ "as if / as though + 从句")
+          // → 它是已知语法块,强制标记;模型这次没标也不影响(②.5 会补详解条目)。
+          // "ice cream" 这类词组不在模板名里,保持可收藏。
+          const re = new RegExp(`(^|[^A-Za-z])${escRe(eng)}([^A-Za-z]|$)`, "i");
+          if (TEMPLATE_NAMES.some(n => re.test(n))) {
+            w.isGrammarStructure = true;
+          }
         }
       }
     }
