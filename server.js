@@ -43,6 +43,9 @@ const TEMPLATE_ENUM = ["", ...TEMPLATE_NAMES];   // 空 = 「都对不上」
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;                 // ← 在 Railway 里设置
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";          // 可在 Railway 改型号
+// 词典释义专用:量小(按月缓存、全用户共享)但准确性要求高 —— 小模型会对
+// 生僻词×小语种瞎编(如印地语的 sea urchin),用强一档的型号
+const DICT_MODEL = process.env.OPENAI_MODEL_DICT || "gpt-4o";
 const APP_SHARED_SECRET = process.env.APP_SHARED_SECRET || "";    // 可选:防止别人乱用你的接口
 
 const POS = ["noun","verb","adjective","adverb","pronoun","preposition","conjunction",
@@ -768,7 +771,7 @@ app.post("/word-definition", async (req, res) => {
       `Examples: "sea urchin" → "ウニ" (Japanese); "farts" → "おなら"; "break" → "壊す、休憩"; ` +
       `"travel" → "旅行する、移動する".`;
     const content = await openAIJSON({
-      model: MODEL,
+      model: DICT_MODEL,
       temperature: 0.2,
       messages: [{ role: "user", content: prompt }],
       response_format: {
