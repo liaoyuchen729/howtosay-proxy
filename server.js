@@ -462,6 +462,19 @@ app.post("/translate", async (req, res) => {
           sendToAxiom(evt);   // 没配 token 时静默跳过
         }
       }
+      // 盲区观测:模型一个语法点都没报(连 fallback 名都没有)→ 也要留痕,
+      // 否则"越来越冷"这类零识别的结构永远进不了月度扩模板管道
+      if (parsed.grammarPoints.length === 0) {
+        const evt = {
+          evt: "grammar_none",
+          lang: sourceLanguage,
+          srcSample: String(sourceText).slice(0, 60),
+          tlSample: String(parsed.translation || "").slice(0, 80),
+          ts: new Date().toISOString()
+        };
+        console.log(JSON.stringify(evt));
+        sendToAxiom(evt);
+      }
     }
 
     // ⓪ 校验:语法点必须真的存在于「本次译文」里(跨语言通用 —— 校验对象是英文译文)。
