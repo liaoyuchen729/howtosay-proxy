@@ -227,6 +227,10 @@ function systemPrompt(lang) {
     `seriously ≠ really, very ≠ really, truly ≠ really. Re-check this for every style: the casual / formal / ` +
     `concise rewrites often swap the keyword out, and then the template no longer applies.\n` +
     `\n` +
+    `  SENSE CHECK — a template matches only in its OWN sense:\n` +
+    `    • "feel like doing(想做)" = желание/desire ("I feel like eating pizza"). "feel like + CLAUSE" ` +
+    `("I feel like my nose might break" = it seems) is a DIFFERENT structure — do NOT match the 想做 template; ` +
+    `use templateKey="" with an appropriate fallback name instead.\n` +
     `  COMMON MISTAKES TO AVOID — for these structures the list has NO match, set templateKey="":\n` +
     `    • "prefer X to Y" → NOT "不定式作宾语(want/decide 类)". The "to" here is a PREPOSITION (= "rather than"), ` +
     `not the infinitive "to". leave templateKey="".\n` +
@@ -444,6 +448,23 @@ app.post("/translate", async (req, res) => {
         }
         return { name: g.name || "未命名", triggerWords: g.triggerWords || [], isTemplate: false };
       });
+    }
+
+    // ①.2 比较级兜底(确定性,跨语言 —— 只看英文译文):
+    //    比较级是最高频语法之一,模型时常漏报。译文里出现 "X-er/worse/better/more … than"
+    //    而语法点里没有任何含 than 的触发词 → 注入「比较级 + than」模板点。
+    //    rather/other 等以 er 结尾的非比较词排除。
+    if (Array.isArray(parsed.grammarPoints) && typeof parsed.translation === "string") {
+      const NOT_COMPARATIVE = new Set(["rather", "other", "either", "neither", "whether", "never", "ever", "over", "under", "after"]);
+      const m = parsed.translation.match(/\b([A-Za-z]+er|worse|better|more|less)\s+([A-Za-z]+\s+)?than\b/i);
+      const hasThanPoint = parsed.grammarPoints.some(g =>
+        (g.triggerWords || []).some(t => String(t).trim().toLowerCase() === "than"));
+      if (m && !hasThanPoint && !NOT_COMPARATIVE.has(m[1].toLowerCase())) {
+        const trig = [m[1].toLowerCase()];
+        if (m[2]) trig.push(m[2].trim().toLowerCase());
+        trig.push("than");
+        parsed.grammarPoints.push({ name: "比较级 + than", triggerWords: trig, isTemplate: true });
+      }
     }
 
     // ①.5 词块整形(处理英文侧 → 对 9 种源语言一律生效):
