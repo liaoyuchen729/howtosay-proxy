@@ -282,7 +282,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "matcher-v3";
+const SERVER_BUILD = "matcher-v4";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -371,6 +371,9 @@ const STRUCTURE_DETECTORS = [
   { re: /\btoo\s+[A-Za-z]+\s+(for\s+[A-Za-z]+\s+)?to\s+[A-Za-z]+/i,
     tpl: "too + 形容词 + to do",
     trig: ["too", "to"] },
+  { re: /\b(am|is|are|was|were)\s+worth\s+[A-Za-z]+ing\b/i,
+    tpl: "it's worth + doing(值得做)",
+    trig: ["worth"] },
 ].filter(d => TEMPLATE_NAMES.includes(d.tpl));  // 模板不存在的条目静默剔除
 
 // 调 OpenAI 的统一封装:
@@ -625,11 +628,17 @@ app.post("/translate", async (req, res) => {
           return chunkTokens.every(tok => trigs.includes(tok));         // 块内每个词都被触发词覆盖
         });
         if (covered) continue;
-        // 找名字里包含该块的模板(词边界匹配),且模板的【完整词组】必须匹配译文 ——
-        // 否则块 "to be" 会注入 "to be honest"(实测事故:译文只有 to be sick)
-        const re = new RegExp(`(^|[^A-Za-z])${chunk.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z]|$)`, "i");
+        // 用匹配器对【块文本】反查模板:模板的完整词组要能在块文本里找到
+        // ("took care of" 经不规则动词表命中 "take care of(照顾)" → 本地详解;
+        //  "to be" 不会命中 "to be honest" —— 块里没有 honest)。
+        // 同时要求模板词组也匹配整句译文,双保险。
+        const chunkCheck = makeTemplateMatcher(w.english.trim());
         const tplCheck = makeTemplateMatcher(String(parsed.translation || ""));
-        const tpl = TEMPLATE_NAMES.find(n => re.test(n) && tplCheck(n));
+        const tpl = TEMPLATE_NAMES.find(n => {
+          const alts = String(n).split(/\/|(?:^|\s)vs(?:\s|$)/i).map(tplPhraseRuns);
+          if (!alts.some(a => a.length > 0)) return false;   // 纯中文名不参与反查
+          return chunkCheck(n) && tplCheck(n);
+        });
         if (tpl) {
           parsed.grammarPoints.push({ name: tpl, triggerWords: [w.english.trim()], isTemplate: true });
         } else {
