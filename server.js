@@ -608,6 +608,7 @@ let cacheMonth = monthKey();
 const exampleCache = new Map();  // "lang|english|sense" → {en, cn}
 const grammarCache = new Map();  // "lang|grammarName" → {meaning, structure, examples}
 const defCache     = new Map();  // "lang|english|pos" → {definition}(词典式对译)
+const sentCache    = new Map();  // "lang|sentence" → {translation}(练习题整句翻译,句意不变 → 永久缓存)
 const CACHE_MAX = 30000;
 function cacheSweep() {
   if (cacheMonth !== monthKey()) {
@@ -770,6 +771,56 @@ app.post("/word-definition", async (req, res) => {
     let parsed;
     try { parsed = JSON.parse(content); } catch { return res.status(502).json({ error: "bad_json" }); }
     cachePut(defCache, key, parsed);
+    res.json(parsed);
+  } catch (e) {
+    if (e && e.status) return res.status(e.status).json({ error: e.error, detail: e.detail });
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// 练习题整句翻译:语法练习答题后,把完整正确句翻成用户母语。
+// body: { sentence, sourceLanguage }   返回: { translation }
+// 句子的意思是固定的 → 永久缓存(同 defCache,不按月清),同句全用户共享。
+const sentenceTranslationSchema = {
+  type: "object",
+  properties: { translation: { type: "string" } },
+  required: ["translation"],
+  additionalProperties: false
+};
+app.post("/sentence-translation", async (req, res) => {
+  try {
+    if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY not set" });
+    }
+    const { sentence, sourceLanguage = "Simplified Chinese" } = req.body || {};
+    if (!sentence || !String(sentence).trim()) {
+      return res.status(400).json({ error: "empty sentence" });
+    }
+    const lang = String(sourceLanguage);
+    cacheSweep();
+    const key = `${lang}|${String(sentence).trim()}`;
+    const hit = sentCache.get(key);
+    if (hit) return res.json(hit);
+
+    const prompt =
+      `Translate this simple English sentence into natural ${lang} for a language learner.\n` +
+      `Sentence: "${String(sentence).trim()}"\n` +
+      `Return only the ${lang} translation — natural, plain, no notes, no romanization.`;
+    const content = await openAIJSON({
+      model: MODEL,
+      temperature: 0.2,
+      messages: [{ role: "user", content: prompt }],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "sentence_translation", strict: true, schema: sentenceTranslationSchema }
+      }
+    });
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { return res.status(502).json({ error: "bad_json" }); }
+    cachePut(sentCache, key, parsed);
     res.json(parsed);
   } catch (e) {
     if (e && e.status) return res.status(e.status).json({ error: e.error, detail: e.detail });
