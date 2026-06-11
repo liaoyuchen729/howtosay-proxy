@@ -205,6 +205,10 @@ function systemPrompt(lang) {
     `  - If it contains "way more / way better / way too" → match "way + 比较级", NOT prefer.\n` +
     `  - If it contains "had better / 'd better" → match had better.\n` +
     `  - If it contains "end up + V-ing" → match end up doing.\n` +
+    `  - If it contains a comparative ("worse than", "better than", "more X than", "-er than") → ALWAYS ` +
+    `include it as a grammar point (matched template or fallback). Comparatives must never be skipped.\n` +
+    `  - Modal + verb ("might break", "could happen") is a valid grammar point when it carries the ` +
+    `sentence's meaning (可能性/推量); include its full triggerWords (["might","break"], not just ["might"]).\n` +
     `  - If it contains a plain "should + base verb" → just past tense / simple modal — do NOT force a fit.\n` +
     `  - If your translation does NOT contain the source's idiomatic structure (e.g. user wrote "最终爱上" but you ` +
     `translated as "eventually fell in love"), pick a templateKey based on the actual English you produced (e.g. ` +
@@ -484,33 +488,16 @@ app.post("/translate", async (req, res) => {
       }
     }
 
-    // ② 服务端兜底:words 里凡是出现在某 grammarPoint.triggerWords 的英文片段,
-    //    强制改 isGrammarStructure=true(避免下划线/收藏按钮判断错乱)
-    //    —— 但只对「真·多词语法模式」生效:triggerWords.length >= 2(如 ["prefer","to"]、["had","better"])。
-    //    单 trigger 的情况(如某模板只标出一个动词)不翻 flag,否则会把普通动词/形容词错标成语法。
-    if (Array.isArray(parsed.words) && Array.isArray(parsed.grammarPoints)) {
-      const triggerSet = new Set();
-      for (const g of parsed.grammarPoints) {
-        const tw = Array.isArray(g.triggerWords) ? g.triggerWords : [];
-        if (tw.length < 2) continue;  // 单 trigger 不算多词语法
-        for (const t of tw) {
-          triggerSet.add(String(t).trim().toLowerCase());
-        }
-      }
-      // 同时:对单词单位强制 false(不论模型给的什么)
-      // 规则:english 不含空格 + 不是已知的多词缩写 → 视为单词,isGrammarStructure 必为 false
-      // 但若它出现在 triggerSet 里(多词语法的一部分),允许翻 true
+    // ② 单一职责(整体重构,删掉旧的 triggerWords≥2 翻 flag 补丁):
+    //    · isGrammarStructure 只表示「多词语法块」(might break / worse than 这种合体块),
+    //      作用只有一个 —— 不可收藏进单词本。单 token 一律 false:单词永远可收藏。
+    //    · 「划不划下划线」由 App 端根据 grammarPoints.triggerWords 推导:
+    //      凡出现在语法解说里的触发词(哪怕只有一个,如 might),词块一律划线,
+    //      和语法解说严格一致。服务端不再为下划线翻任何 flag。
+    if (Array.isArray(parsed.words)) {
       for (const w of parsed.words) {
         if (!w || typeof w.english !== "string") continue;
-        const e = w.english.trim().toLowerCase();
-        if (triggerSet.has(e)) {
-          w.isGrammarStructure = true;
-          continue;
-        }
-        // 单 token(无空格)且词性是普通词 → 强制 false
-        const isSingleToken = !/\s/.test(e);
-        const contentPOS = new Set(["noun","verb","adjective","adverb"]);
-        if (isSingleToken && contentPOS.has(w.partOfSpeech)) {
+        if (!/\s/.test(w.english.trim())) {
           w.isGrammarStructure = false;
         }
       }
