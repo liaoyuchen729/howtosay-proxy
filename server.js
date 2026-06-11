@@ -392,7 +392,37 @@ app.post("/translate", async (req, res) => {
       //   "if only(但願)"           → 词组 "if only" 必须【连续】出现,单独的 if 不算
       // 教训:逐词 any-match 两头都错 —— 阈值高了误杀 as if,低了放过 if only。
       // 模板名里的占位符 / 泛指词,断开词组、不参与匹配
-      const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc","do","doing","done","x","y"]);
+      // (n/v 是 "give up + n/doing" 这类名字里的词性占位符,必须过滤,
+      //  否则会要求译文里出现孤立的 "n" —— 离线审计抓到的真 bug)
+      const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc","do","doing","done","x","y","n","v"]);
+      // 不规则动词:后缀容忍 (s|es|d|ed|ing) 救不了的变位形式
+      // (离线审计:55 个模板含这些动词,"took care of" 匹配不上 "take care of" 是必修 bug)
+      const IRREGULAR_FORMS = {
+        have:["have","has","had","having"], get:["get","gets","got","gotten","getting"],
+        make:["make","makes","made","making"], take:["take","takes","took","taken","taking"],
+        keep:["keep","keeps","kept","keeping"], go:["go","goes","went","gone","going"],
+        come:["come","comes","came","coming"], feel:["feel","feels","felt","feeling"],
+        think:["think","thinks","thought","thinking"], say:["say","says","said","saying"],
+        see:["see","sees","saw","seen","seeing"], know:["know","knows","knew","known","knowing"],
+        let:["let","lets","letting"], find:["find","finds","found","finding"],
+        give:["give","gives","gave","given","giving"], tell:["tell","tells","told","telling"],
+        leave:["leave","leaves","left","leaving"], pay:["pay","pays","paid","paying"],
+        spend:["spend","spends","spent","spending"], lose:["lose","loses","lost","losing"],
+        catch:["catch","catches","caught","catching"], put:["put","puts","putting"],
+        run:["run","runs","ran","running"], cut:["cut","cuts","cutting"],
+        begin:["begin","begins","began","begun"], write:["write","writes","wrote","written"],
+        bring:["bring","brings","brought","bringing"], buy:["buy","buys","bought","buying"],
+        hold:["hold","holds","held","holding"], stand:["stand","stands","stood","standing"],
+      };
+      // 缩写词 / 所有格占位:展开形式与缩写互通
+      const TOKEN_ALT = {
+        "can't":["can't","cannot","can not"], "won't":["won't","will not"],
+        "i'd":["i'd","i would","i had"], "you'd":["you'd","you would","you had"],
+        "it's":["it's","it is","it has"], "i'm":["i'm","i am"],
+        "would've":["would've","would have"],
+        // one's = 任意所有格:make up one's mind → made up his mind
+        "one's":["one's","his","her","my","your","our","their","its"],
+      };
       // 把一个备选段切成若干「连续英文词组」(占位符和中文把词组断开)
       const phraseRuns = (segment) => {
         const runs = [];
@@ -415,17 +445,28 @@ app.post("/translate", async (req, res) => {
         if (cur.length) runs.push(cur);
         return runs;
       };
-      // 词组是否连续出现在译文里(整词边界;be 兼容变位;每个词容忍常见后缀变化)
+      // 单个 token → 正则片段:be/不规则动词用变位表,缩写用展开表,
+      // 通用 n't 互通(don't ↔ do not),其余用后缀容忍
+      const tokenPattern = (t) => {
+        const tl = t.toLowerCase();
+        if (tl === "be") return "(?:be|is|am|are|was|were|been|being)";
+        if (IRREGULAR_FORMS[tl]) return `(?:${IRREGULAR_FORMS[tl].join("|")})`;
+        if (TOKEN_ALT[tl]) return `(?:${TOKEN_ALT[tl].map(a => escapeRe(a).replace(/\\ /g, "\\s+").replace(/ /g, "\\s+")).join("|")})`;
+        if (tl.endsWith("n't")) {
+          const stem = tl.slice(0, -3);
+          return `(?:${escapeRe(tl)}|${escapeRe(stem)}\\s+not)`;
+        }
+        return escapeRe(t) + "(?:s|es|d|ed|ing)?";
+      };
+      // 词组是否连续出现在译文里(整词边界)
       const phraseInTranslation = (run) => {
-        const toks = run.map(t => {
-          if (t.toLowerCase() === "be") return "(?:be|is|am|are|was|were|been|being)";
-          return escapeRe(t) + "(?:s|es|d|ed|ing)?";
-        });
+        const toks = run.map(tokenPattern);
         return new RegExp(`(^|[^A-Za-z])${toks.join("\\s+")}([^A-Za-z]|$)`, "i").test(translation);
       };
-      // 模板名校验:按 / 切备选;只要有一个备选的【全部】词组都出现 → 通过
+      // 模板名校验:按 / 和独立的 vs 切备选("few vs a few" 是两个备选,不是一个词组);
+      // 只要有一个备选的【全部】词组都出现 → 通过
       const templateMatchesTranslation = (name) => {
-        const alts = String(name).split("/").map(phraseRuns);
+        const alts = String(name).split(/\/|(?:^|\s)vs(?:\s|$)/i).filter(s => s !== undefined).map(phraseRuns);
         if (!alts.some(a => a.length > 0)) return true;  // 纯中文名,无英文词组可查
         return alts.some(a => a.length > 0 && a.every(phraseInTranslation));
       };
