@@ -1,5 +1,8 @@
 // ===== 实测层:20 句覆盖各类语法,自动核查 4 项指标 =====
 import { readFileSync } from 'fs';
+// 接口密钥:环境变量优先,否则读仓库根目录的 .app-secret(gitignored)
+let APP_KEY = process.env.APP_SHARED_SECRET || "";
+try { if (!APP_KEY) APP_KEY = readFileSync(new URL('../.app-secret', import.meta.url), 'utf-8').trim(); } catch {}
 const T = JSON.parse(readFileSync('templates.json'));
 const TEMPLATE_NAMES = new Set(T.templates);
 
@@ -75,7 +78,7 @@ for (const [src, concepts, srcLang] of CASES) {
   let r;
   try {
     const resp = await fetch("https://howtosay-proxy-production.up.railway.app/translate", {
-      method: "POST", headers: {"Content-Type":"application/json"},
+      method: "POST", headers: {"Content-Type":"application/json", ...(APP_KEY ? {"X-App-Key": APP_KEY} : {})},
       body: JSON.stringify({sourceText: src, style: "standard", sourceLanguage: srcLang}),
       signal: AbortSignal.timeout(70000)
     });
