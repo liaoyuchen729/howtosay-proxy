@@ -71,7 +71,10 @@ const DETECTOR_OK = [
   { re: /\btoo\s+[A-Za-z]+\s+(for\s+[A-Za-z]+\s+)?to\s+[A-Za-z]+/i, tpl: "too + 形容词 + to do" },
   { re: /\b(am|is|are|was|were)\s+worth\s+[A-Za-z]+ing\b/i, tpl: "it's worth + doing(值得做)" },
 ];
-const fails = { leak: [], trigger: [], chunk: [] };
+const fails = { leak: [], trigger: [], chunk: [], spanShare: [], intensifier: [], funcWord: [] };
+const INTENSIFIERS = new Set(["really","actually","truly","just","simply","definitely","certainly"]);
+const ADV_OK = ["本当に","ほんとうに","ほんとに","本当","実際","実は","マジ","真的","真","确实","確實","其实","其實","的确","的確","實在","实在","정말","정말로","진짜","사실","실제로","realmente","de verdad","en realidad","de hecho","mesmo","de fato","सच में","सचमुच","वाक़ई","असल में","thật","thực sự","thật sự","quả thật","benar-benar","sungguh","memang","sebenarnya"];
+const FUNC_WORDS = new Set(["i","you","he","she","it","we","they","me","him","her","us","them","my","your","his","its","our","their","am","is","are","was","were","a","an","the","i'm","it's","'s","'re","'m"]);
 let conceptHits = 0, total = 0;
 for (const [src, concepts, srcLang] of CASES) {
   total++;
@@ -110,6 +113,28 @@ for (const [src, concepts, srcLang] of CASES) {
       return tr.includes(norm(w.english)) || ct.every(x=>tr.includes(x)); });
     if (!covered) fails.chunk.push(`[${src}] 块 "${w.english}" 无详解条目`);
   }
+  // D. 同 span 超额认领(原文出现次数不够分)
+  {
+    const counts = new Map();
+    for (const w of (r.words||[])) if (w.sourceSpan) counts.set(w.sourceSpan, (counts.get(w.sourceSpan)||0)+1);
+    for (const [sp, n] of counts) {
+      if (n < 2) continue;
+      let occ = 0, p = 0;
+      while ((p = src.indexOf(sp, p)) !== -1) { occ++; p += sp.length; }
+      if (n > occ) fails.spanShare.push(`[${src}] "${sp}" 被认领${n}次但只出现${occ}次`);
+    }
+  }
+  // E. 添加的强调副词错配(span 不是真副词)
+  for (const w of (r.words||[])) {
+    if (!w.sourceSpan || !INTENSIFIERS.has((w.english||"").trim().toLowerCase())) continue;
+    if (!ADV_OK.some(a => w.sourceSpan.includes(a) || a.includes(w.sourceSpan)))
+      fails.intensifier.push(`[${src}] ${w.english}=${w.sourceSpan}`);
+  }
+  // F. 功能词带色(代词/be/冠词不应有对齐)
+  for (const w of (r.words||[])) {
+    if (w.sourceSpan && FUNC_WORDS.has((w.english||"").trim().toLowerCase()))
+      fails.funcWord.push(`[${src}] ${w.english}=${w.sourceSpan}`);
+  }
   // D. 软指标:期望概念命中
   const names = gp.map(g=>g.name).join(" | ");
   const hit = concepts.some(c => names.toLowerCase().includes(c.toLowerCase()) || (c.length<=12 && tl.toLowerCase().includes(c.toLowerCase()) && false));
@@ -120,4 +145,7 @@ console.log("\n========== 汇总 ==========");
 console.log("硬指标 A 校验泄漏:", fails.leak.length, fails.leak.slice(0,5));
 console.log("硬指标 B 触发词缺失:", fails.trigger.length, fails.trigger.slice(0,5));
 console.log("硬指标 C 语法块未覆盖:", fails.chunk.length, fails.chunk.slice(0,5));
-console.log(`软指标 D 目标语法识别率: ${conceptHits}/${total}`);
+console.log("硬指标 D 同span超额认领:", fails.spanShare.length, fails.spanShare.slice(0,3));
+console.log("硬指标 E 强调副词错配:", fails.intensifier.length, fails.intensifier.slice(0,3));
+console.log("硬指标 F 功能词带色:", fails.funcWord.length, fails.funcWord.slice(0,3));
+console.log(`软指标 识别率: ${conceptHits}/${total}`);
