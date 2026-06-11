@@ -282,7 +282,96 @@ const schema = {
 };
 
 // 健康检查
-app.get("/", (_req, res) => res.send("How to Say proxy: OK"));
+const SERVER_BUILD = "matcher-v3";
+app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
+
+
+// ============= 词组级模板匹配器(模块级,⓪校验 和 ②.5兜底 共用) =============
+const ESC_RE = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// 模板名里的占位符 / 泛指词,断开词组、不参与匹配
+const TPL_PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc","do","doing","done","x","y","n","v"]);
+// 不规则动词:后缀容忍 (s|es|d|ed|ing) 救不了的变位形式
+const IRREGULAR_FORMS = {
+  have:["have","has","had","having"], get:["get","gets","got","gotten","getting"],
+  make:["make","makes","made","making"], take:["take","takes","took","taken","taking"],
+  keep:["keep","keeps","kept","keeping"], go:["go","goes","went","gone","going"],
+  come:["come","comes","came","coming"], feel:["feel","feels","felt","feeling"],
+  think:["think","thinks","thought","thinking"], say:["say","says","said","saying"],
+  see:["see","sees","saw","seen","seeing"], know:["know","knows","knew","known","knowing"],
+  let:["let","lets","letting"], find:["find","finds","found","finding"],
+  give:["give","gives","gave","given","giving"], tell:["tell","tells","told","telling"],
+  leave:["leave","leaves","left","leaving"], pay:["pay","pays","paid","paying"],
+  spend:["spend","spends","spent","spending"], lose:["lose","loses","lost","losing"],
+  catch:["catch","catches","caught","catching"], put:["put","puts","putting"],
+  run:["run","runs","ran","running"], cut:["cut","cuts","cutting"],
+  begin:["begin","begins","began","begun"], write:["write","writes","wrote","written"],
+  bring:["bring","brings","brought","bringing"], buy:["buy","buys","bought","buying"],
+  hold:["hold","holds","held","holding"], stand:["stand","stands","stood","standing"],
+};
+// 缩写词 / 所有格占位:展开形式与缩写互通
+const TOKEN_ALT = {
+  "can't":["can't","cannot","can not"], "won't":["won't","will not"],
+  "i'd":["i'd","i would","i had"], "you'd":["you'd","you would","you had"],
+  "it's":["it's","it is","it has"], "i'm":["i'm","i am"],
+  "would've":["would've","would have"],
+  "one's":["one's","his","her","my","your","our","their","its"],
+};
+function tplPhraseRuns(segment) {
+  const runs = []; let cur = [];
+  const re = /[A-Za-z']+/g; let m, lastEnd = -1;
+  while ((m = re.exec(segment)) !== null) {
+    const tok = m[0];
+    const adjacent = lastEnd >= 0 && /^\s*$/.test(segment.slice(lastEnd, m.index));
+    if (TPL_PLACEHOLDER.has(tok.toLowerCase())) { if (cur.length) { runs.push(cur); cur = []; } }
+    else if (adjacent && cur.length) cur.push(tok);
+    else { if (cur.length) runs.push(cur); cur = [tok]; }
+    lastEnd = m.index + tok.length;
+  }
+  if (cur.length) runs.push(cur);
+  return runs;
+}
+function tplTokenPattern(t) {
+  const tl = t.toLowerCase();
+  if (tl === "be") return "(?:be|is|am|are|was|were|been|being)";
+  if (IRREGULAR_FORMS[tl]) return `(?:${IRREGULAR_FORMS[tl].join("|")})`;
+  if (TOKEN_ALT[tl]) return `(?:${TOKEN_ALT[tl].map(a => ESC_RE(a).replace(/ /g, "\\s+")).join("|")})`;
+  if (tl.endsWith("n't")) {
+    const stem = tl.slice(0, -3);
+    return `(?:${ESC_RE(tl)}|${ESC_RE(stem)}\\s+not)`;
+  }
+  return ESC_RE(t) + "(?:s|es|d|ed|ing)?";
+}
+// 返回 (模板名) => 是否与该译文匹配 的校验函数
+function makeTemplateMatcher(translation) {
+  const phraseIn = (run) =>
+    new RegExp(`(^|[^A-Za-z])${run.map(tplTokenPattern).join("\\s+")}([^A-Za-z]|$)`, "i").test(translation);
+  return (name) => {
+    const alts = String(name).split(/\/|(?:^|\s)vs(?:\s|$)/i).map(tplPhraseRuns);
+    if (!alts.some(a => a.length > 0)) return true;  // 纯中文名,无英文词组可查
+    return alts.some(a => a.length > 0 && a.every(phraseIn));
+  };
+}
+
+// ============= 高置信结构检测表 =============
+// 译文里出现这些「不会认错」的结构而模型漏报时,确定性注入对应模板点。
+// 只注入【模板存在】的结构(App 显示本地 9 语言详解,且名字不会有语言问题)。
+const STRUCTURE_DETECTORS = [
+  { re: /\bnot only\b[\s\S]{0,80}?\bbut(\s+also)?\b/i,
+    tpl: "关联连词(either...or / neither...nor / not only...but also)",
+    trig: ["not only", "but also", "not", "only", "but", "also"] },
+  { re: /\b(am|is|are|was|were|been|being|get|gets|got|getting)\s+used\s+to\b/i,
+    tpl: "used to do vs be used to doing",
+    trig: ["used", "to"] },
+  { re: /\b(can't|cannot|can not|couldn't|could not)\s+help\b/i,
+    tpl: "can't help doing(忍不住)",
+    trig: ["help"] },
+  { re: /\bso\s+[A-Za-z]+\s+that\b/i,
+    tpl: "so + 形容词 + that 从句",
+    trig: ["so", "that"] },
+  { re: /\btoo\s+[A-Za-z]+\s+(for\s+[A-Za-z]+\s+)?to\s+[A-Za-z]+/i,
+    tpl: "too + 形容词 + to do",
+    trig: ["too", "to"] },
+].filter(d => TEMPLATE_NAMES.includes(d.tpl));  // 模板不存在的条目静默剔除
 
 // 调 OpenAI 的统一封装:
 //   · 55 秒硬超时(App 端 60 秒,留 5 秒余量)—— OpenAI 偶发挂起时快速失败,而不是无限转圈
@@ -386,90 +475,7 @@ app.post("/translate", async (req, res) => {
         if (!f) return false;
         return new RegExp(`(^|[^A-Za-z])${escapeRe(f)}([^A-Za-z]|$)`, "i").test(translation);
       };
-      // ===== 词组级模板校验 =====
-      // 模板名里嵌的是英文【词组】(可能带 / 分隔的备选):
-      //   "as if / as though + 从句" → 备选 ["as if"] 和 ["as though"],任一完整出现即可
-      //   "if only(但願)"           → 词组 "if only" 必须【连续】出现,单独的 if 不算
-      // 教训:逐词 any-match 两头都错 —— 阈值高了误杀 as if,低了放过 if only。
-      // 模板名里的占位符 / 泛指词,断开词组、不参与匹配
-      // (n/v 是 "give up + n/doing" 这类名字里的词性占位符,必须过滤,
-      //  否则会要求译文里出现孤立的 "n" —— 离线审计抓到的真 bug)
-      const PLACEHOLDER = new Set(["sb","sth","adj","adv","one","ving","ved","verb","noun","wh","etc","do","doing","done","x","y","n","v"]);
-      // 不规则动词:后缀容忍 (s|es|d|ed|ing) 救不了的变位形式
-      // (离线审计:55 个模板含这些动词,"took care of" 匹配不上 "take care of" 是必修 bug)
-      const IRREGULAR_FORMS = {
-        have:["have","has","had","having"], get:["get","gets","got","gotten","getting"],
-        make:["make","makes","made","making"], take:["take","takes","took","taken","taking"],
-        keep:["keep","keeps","kept","keeping"], go:["go","goes","went","gone","going"],
-        come:["come","comes","came","coming"], feel:["feel","feels","felt","feeling"],
-        think:["think","thinks","thought","thinking"], say:["say","says","said","saying"],
-        see:["see","sees","saw","seen","seeing"], know:["know","knows","knew","known","knowing"],
-        let:["let","lets","letting"], find:["find","finds","found","finding"],
-        give:["give","gives","gave","given","giving"], tell:["tell","tells","told","telling"],
-        leave:["leave","leaves","left","leaving"], pay:["pay","pays","paid","paying"],
-        spend:["spend","spends","spent","spending"], lose:["lose","loses","lost","losing"],
-        catch:["catch","catches","caught","catching"], put:["put","puts","putting"],
-        run:["run","runs","ran","running"], cut:["cut","cuts","cutting"],
-        begin:["begin","begins","began","begun"], write:["write","writes","wrote","written"],
-        bring:["bring","brings","brought","bringing"], buy:["buy","buys","bought","buying"],
-        hold:["hold","holds","held","holding"], stand:["stand","stands","stood","standing"],
-      };
-      // 缩写词 / 所有格占位:展开形式与缩写互通
-      const TOKEN_ALT = {
-        "can't":["can't","cannot","can not"], "won't":["won't","will not"],
-        "i'd":["i'd","i would","i had"], "you'd":["you'd","you would","you had"],
-        "it's":["it's","it is","it has"], "i'm":["i'm","i am"],
-        "would've":["would've","would have"],
-        // one's = 任意所有格:make up one's mind → made up his mind
-        "one's":["one's","his","her","my","your","our","their","its"],
-      };
-      // 把一个备选段切成若干「连续英文词组」(占位符和中文把词组断开)
-      const phraseRuns = (segment) => {
-        const runs = [];
-        let cur = [];
-        const re = /[A-Za-z']+/g;
-        let m, lastEnd = -1;
-        while ((m = re.exec(segment)) !== null) {
-          const tok = m[0];
-          const adjacent = lastEnd >= 0 && /^\s*$/.test(segment.slice(lastEnd, m.index));
-          if (PLACEHOLDER.has(tok.toLowerCase())) {
-            if (cur.length) { runs.push(cur); cur = []; }
-          } else if (adjacent && cur.length) {
-            cur.push(tok);
-          } else {
-            if (cur.length) runs.push(cur);
-            cur = [tok];
-          }
-          lastEnd = m.index + tok.length;
-        }
-        if (cur.length) runs.push(cur);
-        return runs;
-      };
-      // 单个 token → 正则片段:be/不规则动词用变位表,缩写用展开表,
-      // 通用 n't 互通(don't ↔ do not),其余用后缀容忍
-      const tokenPattern = (t) => {
-        const tl = t.toLowerCase();
-        if (tl === "be") return "(?:be|is|am|are|was|were|been|being)";
-        if (IRREGULAR_FORMS[tl]) return `(?:${IRREGULAR_FORMS[tl].join("|")})`;
-        if (TOKEN_ALT[tl]) return `(?:${TOKEN_ALT[tl].map(a => escapeRe(a).replace(/\\ /g, "\\s+").replace(/ /g, "\\s+")).join("|")})`;
-        if (tl.endsWith("n't")) {
-          const stem = tl.slice(0, -3);
-          return `(?:${escapeRe(tl)}|${escapeRe(stem)}\\s+not)`;
-        }
-        return escapeRe(t) + "(?:s|es|d|ed|ing)?";
-      };
-      // 词组是否连续出现在译文里(整词边界)
-      const phraseInTranslation = (run) => {
-        const toks = run.map(tokenPattern);
-        return new RegExp(`(^|[^A-Za-z])${toks.join("\\s+")}([^A-Za-z]|$)`, "i").test(translation);
-      };
-      // 模板名校验:按 / 和独立的 vs 切备选("few vs a few" 是两个备选,不是一个词组);
-      // 只要有一个备选的【全部】词组都出现 → 通过
-      const templateMatchesTranslation = (name) => {
-        const alts = String(name).split(/\/|(?:^|\s)vs(?:\s|$)/i).filter(s => s !== undefined).map(phraseRuns);
-        if (!alts.some(a => a.length > 0)) return true;  // 纯中文名,无英文词组可查
-        return alts.some(a => a.length > 0 && a.every(phraseInTranslation));
-      };
+      const templateMatchesTranslation = makeTemplateMatcher(translation);
       parsed.grammarPoints = parsed.grammarPoints.filter(g => {
         if (Array.isArray(g.triggerWords)) {
           g.triggerWords = g.triggerWords.filter(inTranslation);
@@ -512,6 +518,25 @@ app.post("/translate", async (req, res) => {
         if (m[2]) trig.push(m[2].trim().toLowerCase());
         trig.push("than");
         parsed.grammarPoints.push({ name: "比较级 + than", triggerWords: trig, isTemplate: true });
+      }
+    }
+
+    // ①.3 高置信结构检测(确定性,跨语言 —— 只扫英文译文):
+    //    not only.../be used to/can't help/so...that/too...to 这些结构出现在译文里
+    //    却没有任何语法点覆盖时,注入对应模板点 —— 不依赖模型这次是否报全。
+    if (Array.isArray(parsed.grammarPoints) && typeof parsed.translation === "string") {
+      const tl = parsed.translation;
+      for (const d of STRUCTURE_DETECTORS) {
+        if (!d.re.test(tl)) continue;
+        const dup = parsed.grammarPoints.some(g =>
+          g.name === d.tpl ||
+          (g.triggerWords || []).map(t => String(t).toLowerCase()).some(t => d.trig.includes(t)));
+        if (dup) continue;
+        // 触发词只保留真出现在译文里的(整词)
+        const trig = d.trig.filter(t =>
+          new RegExp(`(^|[^A-Za-z])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z]|$)`, "i").test(tl));
+        if (!trig.length) continue;
+        parsed.grammarPoints.push({ name: d.tpl, triggerWords: trig, isTemplate: true });
       }
     }
 
@@ -600,9 +625,11 @@ app.post("/translate", async (req, res) => {
           return chunkTokens.every(tok => trigs.includes(tok));         // 块内每个词都被触发词覆盖
         });
         if (covered) continue;
-        // 找名字里包含该块的模板(词边界匹配,避免 "to do" 误配进无关名)
+        // 找名字里包含该块的模板(词边界匹配),且模板的【完整词组】必须匹配译文 ——
+        // 否则块 "to be" 会注入 "to be honest"(实测事故:译文只有 to be sick)
         const re = new RegExp(`(^|[^A-Za-z])${chunk.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z]|$)`, "i");
-        const tpl = TEMPLATE_NAMES.find(n => re.test(n));
+        const tplCheck = makeTemplateMatcher(String(parsed.translation || ""));
+        const tpl = TEMPLATE_NAMES.find(n => re.test(n) && tplCheck(n));
         if (tpl) {
           parsed.grammarPoints.push({ name: tpl, triggerWords: [w.english.trim()], isTemplate: true });
         } else {
