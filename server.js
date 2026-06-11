@@ -6,7 +6,7 @@
 //   返回: 直接是 App 需要的结果 JSON(translation / words / grammarPoints)
 
 import express from "express";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -171,7 +171,11 @@ function systemPrompt(lang) {
     `For ordinary single-word vocabulary — common nouns, verbs, adjectives, adverbs, including inflected forms ` +
     `like "stinks", "farts", "ran", "beautifully", "happier" — isGrammarStructure MUST be false. ` +
     `If in doubt, set false. Single content words are never grammar structures.\n` +
-    `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). For each:\n` +
+    `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). ` +
+    `An EMPTY grammarPoints array is acceptable ONLY for trivially simple sentences (plain ` +
+    `subject-verb-object with no notable pattern). If the translation contains anything a learner would ` +
+    `ask about — comparatives, "X-er and X-er", idioms, modal nuance — you MUST report it (with templateKey ` +
+    `when matched, otherwise with a short ${lang} name). For each:\n` +
     `\n` +
     `  STEP 1 — identify the grammar by inspecting YOUR ENGLISH TRANSLATION, not the user's source.\n` +
     `  Read your translation back. Which fixed structures actually appear in those English words?\n` +
@@ -179,6 +183,7 @@ function systemPrompt(lang) {
     `  - If it contains "way more / way better / way too" → match "way + 比较级", NOT prefer.\n` +
     `  - If it contains "had better / 'd better" → match had better.\n` +
     `  - If it contains "end up + V-ing" → match end up doing.\n` +
+    `  - If it contains "X-er and X-er" / "more and more" → match 比较级 and 比较级(越来越).\n` +
     `  - If it contains a comparative ("worse than", "better than", "more X than", "-er than") → ALWAYS ` +
     `include it as a grammar point (matched template or fallback). Comparatives must never be skipped.\n` +
     `  - Modal + verb ("might break", "could happen") is a valid grammar point when it carries the ` +
@@ -282,7 +287,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "matcher-v4";
+const SERVER_BUILD = "v5";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -374,7 +379,64 @@ const STRUCTURE_DETECTORS = [
   { re: /\b(am|is|are|was|were)\s+worth\s+[A-Za-z]+ing\b/i,
     tpl: "it's worth + doing(值得做)",
     trig: ["worth"] },
+  { re: /\b([A-Za-z]+er)\s+and\s+\1\b|\bmore\s+and\s+more\b/i,
+    tpl: "比较级 and 比较级(越来越)",
+    trig: ["and", "more"] },   // 实际命中的比较级词由注入逻辑从匹配结果补充
 ].filter(d => TEMPLATE_NAMES.includes(d.tpl));  // 模板不存在的条目静默剔除
+
+// 弱词模板的结构正则:这些模板名里的英文全是超常见词(the/as/so/that),
+// 词组校验拦不住误配 —— 必须呈现完整结构形态才放行
+const WEAK_TEMPLATE_PATTERNS = {
+  "There be 句型": /\bthere\s+(is|are|was|were|will\s+be|has\s+been|have\s+been)\b/i,
+  "as ... as(同级比较)": /\bas\s+[A-Za-z]+\s+as\b/i,
+  "not as / so ... as(不及)": /\bnot\s+(as|so)\s+[A-Za-z]+\s+as\b/i,
+  "so + 形容词 + that 从句": /\bso\s+[A-Za-z]+\s+that\b/i,
+  "so as to do(以便)": /\bso\s+as\s+to\b/i,
+  "so that + 从句(以便)": /\bso\s+that\b/i,
+  "the 比较级 the 比较级": /\bthe\s+(more|less|[A-Za-z]+er)\b[\s\S]*\bthe\s+(more|less|[A-Za-z]+er)\b/i,
+  "强调句 It is ... that ...": /\bit\s+(is|was)\b[\s\S]{1,40}?\b(that|who)\b/i,
+  "形式主语 It is + adj + to do": /\bit\s+(is|was)\s+[A-Za-z]+\s+to\s+[A-Za-z]+/i,
+  "感叹句(What / How)": /(^|[.!?]\s+)(what|how)\b/i,
+  "不定式被动 to be done": /\bto\s+be\s+[A-Za-z]+(ed|en|wn|ne|lt|nt|pt|ld)\b/i,
+  "选择疑问句(or)": /\bor\b[\s\S]*\?/,
+  "最高级 + in / of": /\b(the\s+[A-Za-z]+est|the\s+most\s+[A-Za-z]+)\b[\s\S]*\b(in|of)\b/i,
+};
+
+// 快速译文:两段式翻译的第一段 —— 只出译文(无模板清单/无词对齐),
+// prompt 极小,1-2 秒返回。App 先显示/朗读它,再等 /translate 的标注。
+const fastSchema = {
+  type: "object",
+  properties: { translation: { type: "string" } },
+  required: ["translation"], additionalProperties: false
+};
+app.post("/translate-fast", async (req, res) => {
+  try {
+    if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    if (!OPENAI_API_KEY) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
+    const { sourceText, style = "standard", sourceLanguage = "Simplified Chinese", givenTranslation = "" } = req.body || {};
+    if (!sourceText || !String(sourceText).trim()) {
+      return res.status(400).json({ error: "empty sourceText" });
+    }
+    const fixedTranslation = String(givenTranslation || "").trim();
+    const prompt =
+      `Translate this ${sourceLanguage} text into natural English.\n` +
+      `STYLE: ${styleDesc(style)}\n\nText:\n${String(sourceText)}`;
+    const content = await openAIJSON({
+      model: MODEL,
+      temperature: 0.3,
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_schema", json_schema: { name: "fast_translation", strict: true, schema: fastSchema } }
+    });
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { return res.status(502).json({ error: "bad_json" }); }
+    res.json(parsed);
+  } catch (e) {
+    if (e && e.status) return res.status(e.status).json({ error: e.error, detail: e.detail });
+    res.status(500).json({ error: String(e) });
+  }
+});
 
 // 调 OpenAI 的统一封装:
 //   · 55 秒硬超时(App 端 60 秒,留 5 秒余量)—— OpenAI 偶发挂起时快速失败,而不是无限转圈
@@ -415,7 +477,9 @@ app.post("/translate", async (req, res) => {
       temperature: 0.3,
       messages: [
         { role: "system", content: systemPrompt(sourceLanguage) },
-        { role: "user", content: `STYLE: ${styleDesc(style)}\n\nTranslate this ${sourceLanguage} text:\n${String(sourceText)}` }
+        { role: "user", content: fixedTranslation
+            ? `STYLE: ${styleDesc(style)}\n\nThe English translation is ALREADY FIXED — copy it into the translation field EXACTLY and annotate IT (do not re-translate):\n"${fixedTranslation}"\n\nSource ${sourceLanguage} text:\n${String(sourceText)}`
+            : `STYLE: ${styleDesc(style)}\n\nTranslate this ${sourceLanguage} text:\n${String(sourceText)}` }
       ],
       response_format: {
         type: "json_schema",
@@ -446,6 +510,8 @@ app.post("/translate", async (req, res) => {
     // 这里逐一修正,保证结果 JSON 永远是合法对齐。
     let parsed;
     try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
+    // 两段式:第一段译文已展示给用户,这里硬覆盖,杜绝两段不一致
+    if (fixedTranslation) parsed.translation = fixedTranslation;
     // 日志埋点:fallback 高频统计 → ① console(Railway 原生面板)② Axiom(可聚合 SQL)
     if (Array.isArray(parsed.grammarPoints)) {
       for (const g of parsed.grammarPoints) {
@@ -500,6 +566,8 @@ app.post("/translate", async (req, res) => {
         if (!tk) return true;  // 模型自答的 fallback 不在此校验范围
         // 模板名的英文词组必须在译文里连续出现,否则配错丢弃
         if (!templateMatchesTranslation(tk)) return false;
+        // 弱词模板(名字全是 the/as/so 等高频词,词组校验形同虚设)→ 结构正则把关
+        if (WEAK_TEMPLATE_PATTERNS[tk] && !WEAK_TEMPLATE_PATTERNS[tk].test(translation)) return false;
         // 触发词全军覆没(译文里一个都找不到)→ 同样视为配错
         if (!Array.isArray(g.triggerWords) || g.triggerWords.length === 0) return false;
         return true;
@@ -548,8 +616,10 @@ app.post("/translate", async (req, res) => {
           g.name === d.tpl ||
           (g.triggerWords || []).map(t => String(t).toLowerCase()).some(t => d.trig.includes(t)));
         if (dup) continue;
-        // 触发词只保留真出现在译文里的(整词)
-        const trig = d.trig.filter(t =>
+        // 触发词:静态表 + 正则捕获到的具体词(如 colder and colder 里的 colder)
+        const m = d.re.exec(tl);
+        const dynamic = m ? m.slice(1).filter(x => typeof x === "string" && /^[A-Za-z]+$/.test(x)) : [];
+        const trig = [...new Set([...d.trig, ...dynamic.map(x => x.toLowerCase())])].filter(t =>
           new RegExp(`(^|[^A-Za-z])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z]|$)`, "i").test(tl));
         if (!trig.length) continue;
         parsed.grammarPoints.push({ name: d.tpl, triggerWords: trig, isTemplate: true });
@@ -771,6 +841,33 @@ const grammarCache = new Map();  // "lang|grammarName" → {meaning, structure, 
 const defCache     = new Map();  // "lang|english|pos" → {definition}(词典式对译)
 const sentCache    = new Map();  // "lang|sentence" → {translation}(练习题整句翻译,句意不变 → 永久缓存)
 const CACHE_MAX = 30000;
+// ===== 缓存持久化(P1):重启不再清零 =====
+// 默认写 /tmp(容器内重启可恢复);在 Railway 挂 Volume 后设 CACHE_DIR=/data 可跨部署持久。
+const CACHE_DIR = process.env.CACHE_DIR || "/tmp";
+const CACHE_FILE = join(CACHE_DIR, "howtosay-cache.json");
+function loadCaches() {
+  try {
+    const d = JSON.parse(readFileSync(CACHE_FILE, "utf-8"));
+    for (const [k, v] of d.def  || []) defCache.set(k, v);     // 词典:永久,无条件回载
+    for (const [k, v] of d.sent || []) sentCache.set(k, v);    // 整句翻译:永久
+    if (d.month === monthKey()) {                              // 例句/语法详解:同月才回载
+      for (const [k, v] of d.example || []) exampleCache.set(k, v);
+      for (const [k, v] of d.grammar || []) grammarCache.set(k, v);
+    }
+    console.log(`cache loaded: def=${defCache.size} sent=${sentCache.size} ex=${exampleCache.size} gr=${grammarCache.size}`);
+  } catch { /* 首次启动无文件,正常 */ }
+}
+function saveCaches() {
+  try {
+    writeFileSync(CACHE_FILE, JSON.stringify({
+      month: monthKey(),
+      def: [...defCache], sent: [...sentCache],
+      example: [...exampleCache], grammar: [...grammarCache],
+    }));
+  } catch { /* 磁盘异常不影响主流程 */ }
+}
+setInterval(saveCaches, 5 * 60 * 1000).unref();   // 每 5 分钟落盘
+process.on("SIGTERM", () => { saveCaches(); process.exit(0); });
 function cacheSweep() {
   if (cacheMonth !== monthKey()) {
     // 例句/语法详解按月换新(保持新鲜感);
@@ -1035,5 +1132,6 @@ app.post("/grammar-detail", async (req, res) => {
   }
 });
 
+loadCaches();
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`How to Say proxy listening on ${port}`));
