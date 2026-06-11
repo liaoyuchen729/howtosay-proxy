@@ -153,6 +153,12 @@ function systemPrompt(lang) {
     `word for, set sourceSpan="". Don't grab it just to "have something there".\n` +
     `    F. Keep each sourceSpan to the MINIMAL substring carrying that meaning. Do not include neighboring ` +
     `words. For "すきじゃない" → "don't like": "like"="すき", "don't"="じゃない".\n` +
+    `    F2. ONE span, ONE unit: two different units MUST NOT claim the same source span occurrence. ` +
+    `Split it: Japanese "おいしそう" → "delicious"="おいし" + "looks"="そう" (そう = looks/seems suffix); ` +
+    `Korean "맛있어 보여" → "delicious"="맛있어", "looks"="보여". Giving both words the same full span is wrong.\n` +
+    `    F3. English intensity adverbs YOU added (really / actually / truly / just / simply) map ONLY to an ` +
+    `explicit source adverb (本当に / 真的 / 정말 / realmente / 本當). NEVER map them to a source adjective ` +
+    `or verb — if the source has no such adverb, sourceSpan="".\n` +
     `    G. Self-check before returning: every non-empty sourceSpan must satisfy ` +
     `(sourceText.includes(sourceSpan) === true). If not, set it to "".\n` +
     `    H. Politeness / hedging scaffolding that you ADDED in English (e.g. "I am afraid that", "I think", ` +
@@ -287,7 +293,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v6-dict";
+const SERVER_BUILD = "v7";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -382,6 +388,9 @@ const STRUCTURE_DETECTORS = [
   { re: /\b([A-Za-z]+er)\s+and\s+\1\b|\bmore\s+and\s+more\b/i,
     tpl: "比较级 and 比较级(越来越)",
     trig: ["and", "more"] },   // 实际命中的比较级词由注入逻辑从匹配结果补充
+  { re: /\b(wonder|wondering|wondered|know|knows|ask|asks|asked|sure)\s+(if|whether)\b/i,
+    tpl: "whether / if 引导的名词性从句",
+    trig: ["if", "whether"] },
 ].filter(d => TEMPLATE_NAMES.includes(d.tpl));  // 模板不存在的条目静默剔除
 
 // 弱词模板的结构正则:这些模板名里的英文全是超常见词(the/as/so/that),
@@ -623,6 +632,30 @@ app.post("/translate", async (req, res) => {
           new RegExp(`(^|[^A-Za-z])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z]|$)`, "i").test(tl));
         if (!trig.length) continue;
         parsed.grammarPoints.push({ name: d.tpl, triggerWords: trig, isTemplate: true });
+      }
+    }
+
+    // ①.4 系动词 + 形容词 检测(用词性判断,正则做不到):
+    //    looks delicious / seems tired / sounds great → 「系动词 look + 形容词」模板
+    if (Array.isArray(parsed.words) && Array.isArray(parsed.grammarPoints)) {
+      const LINKING = new Set(["look","looks","looked","seem","seems","seemed","sound","sounds","sounded",
+                               "smell","smells","smelled","taste","tastes","tasted","feel","feels","felt"]);
+      const TPL_LINKING = "系动词 look + 形容词";
+      if (TEMPLATE_NAMES.includes(TPL_LINKING) &&
+          !parsed.grammarPoints.some(g => g.name === TPL_LINKING)) {
+        for (let i = 0; i + 1 < parsed.words.length; i++) {
+          const a = parsed.words[i], b = parsed.words[i + 1];
+          if (a && b && typeof a.english === "string" &&
+              LINKING.has(a.english.trim().toLowerCase()) &&
+              b.partOfSpeech === "adjective") {
+            parsed.grammarPoints.push({
+              name: TPL_LINKING,
+              triggerWords: [a.english.trim(), b.english.trim()],
+              isTemplate: true
+            });
+            break;
+          }
+        }
       }
     }
 
