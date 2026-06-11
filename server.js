@@ -287,7 +287,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v5";
+const SERVER_BUILD = "v6-dict";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -878,6 +878,67 @@ function cacheSweep() {
     cacheMonth = monthKey();
   }
 }
+// ===== 本地真词典(P2:日/中混合模式) =====
+// 数据:JMdict(EDRDG)+ CC-CEDICT(MDBG),均为 CC BY-SA 授权,需在 App 致谢页注明。
+// 查得到 → 零 token、零延迟、零编造;查不到(俚语/新词/未收录)→ 走 DICT_MODEL 兜底。
+import { gunzipSync } from "zlib";
+let DICT_JA = null, DICT_ZH = null;
+function loadDicts() {
+  try {
+    DICT_JA = JSON.parse(gunzipSync(readFileSync(join(__dirname, "data/dict_en_ja.json.gz"))));
+    DICT_ZH = JSON.parse(gunzipSync(readFileSync(join(__dirname, "data/dict_en_zh.json.gz"))));
+    console.log(`dicts loaded: ja=${Object.keys(DICT_JA).length} zh=${Object.keys(DICT_ZH).length}`);
+  } catch (e) { console.log("dict load skipped:", String(e).slice(0, 80)); }
+}
+// 不规则动词 形→原形 反查表(由 IRREGULAR_FORMS 反转)
+const FORM_TO_BASE = {};
+for (const [base, forms] of Object.entries(IRREGULAR_FORMS)) {
+  for (const f of forms) FORM_TO_BASE[f] = base;
+}
+// 英文词形还原:生成候选原形(exact → 不规则 → 规则后缀)
+function lemmaCandidates(raw) {
+  const w = raw.toLowerCase().trim();
+  const out = [w];
+  const push = (x) => { if (x && !out.includes(x)) out.push(x); };
+  if (FORM_TO_BASE[w]) push(FORM_TO_BASE[w]);
+  if (w.endsWith("ies") && w.length > 4) push(w.slice(0, -3) + "y");
+  if (w.endsWith("es") && w.length > 3) push(w.slice(0, -2));
+  if (w.endsWith("s") && !w.endsWith("ss") && w.length > 2) push(w.slice(0, -1));
+  if (w.endsWith("ing") && w.length > 5) {
+    const st = w.slice(0, -3);
+    push(st); push(st + "e");
+    if (st.length > 2 && st[st.length - 1] === st[st.length - 2]) push(st.slice(0, -1));
+  }
+  if (w.endsWith("ed") && w.length > 4) {
+    const st = w.slice(0, -2);
+    push(st); push(w.slice(0, -1));
+    if (st.length > 2 && st[st.length - 1] === st[st.length - 2]) push(st.slice(0, -1));
+  }
+  // 词组:还原首词(gave up→give up)和尾词(sea urchins→sea urchin)
+  const parts = w.split(/\s+/);
+  if (parts.length > 1) {
+    for (const first of lemmaCandidates(parts[0])) push([first, ...parts.slice(1)].join(" "));
+    for (const last of lemmaCandidates(parts[parts.length - 1])) push([...parts.slice(0, -1), last].join(" "));
+  }
+  return out;
+}
+// 词典查询:命中返回释义字符串,未命中返回 null
+function dictLookup(english, sourceLanguage) {
+  const isJa = /japanese/i.test(sourceLanguage);
+  const isZhHans = /simplified/i.test(sourceLanguage);
+  const isZhHant = /traditional/i.test(sourceLanguage);
+  if (!isJa && !isZhHans && !isZhHant) return null;
+  const dict = isJa ? DICT_JA : DICT_ZH;
+  if (!dict) return null;
+  for (const cand of lemmaCandidates(english)) {
+    const hit = dict[cand];
+    if (!hit || !hit.length) continue;
+    if (isJa) return hit.slice(0, 2).join("、");
+    return hit.slice(0, 2).map(pair => isZhHant ? pair[1] : pair[0]).join("、");
+  }
+  return null;
+}
+
 function cachePut(map, key, val) {
   if (map.size >= CACHE_MAX) map.clear();  // 简单上限保护,防内存膨胀
   map.set(key, val);
@@ -1004,6 +1065,14 @@ app.post("/word-definition", async (req, res) => {
     const key = `${lang}|${String(english).trim().toLowerCase()}|${String(partOfSpeech)}`;
     const hit = defCache.get(key);
     if (hit) return res.json(hit);
+
+    // 先查本地真词典(日/中):零编造、零 token、零延迟
+    const dictDef = dictLookup(String(english), lang);
+    if (dictDef) {
+      const out = { definition: dictDef };
+      cachePut(defCache, key, out);
+      return res.json(out);
+    }
 
     const prompt =
       `You are a standard English–${lang} dictionary. Give the dictionary gloss of the English ` +
@@ -1133,5 +1202,6 @@ app.post("/grammar-detail", async (req, res) => {
 });
 
 loadCaches();
+loadDicts();
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`How to Say proxy listening on ${port}`));
