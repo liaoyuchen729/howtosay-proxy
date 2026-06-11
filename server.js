@@ -415,11 +415,10 @@ app.post("/translate-fast", async (req, res) => {
       return res.status(401).json({ error: "unauthorized" });
     }
     if (!OPENAI_API_KEY) return res.status(500).json({ error: "OPENAI_API_KEY not set" });
-    const { sourceText, style = "standard", sourceLanguage = "Simplified Chinese", givenTranslation = "" } = req.body || {};
+    const { sourceText, style = "standard", sourceLanguage = "Simplified Chinese" } = req.body || {};
     if (!sourceText || !String(sourceText).trim()) {
       return res.status(400).json({ error: "empty sourceText" });
     }
-    const fixedTranslation = String(givenTranslation || "").trim();
     const prompt =
       `Translate this ${sourceLanguage} text into natural English.\n` +
       `STYLE: ${styleDesc(style)}\n\nText:\n${String(sourceText)}`;
@@ -467,7 +466,8 @@ app.post("/translate", async (req, res) => {
     if (!OPENAI_API_KEY) {
       return res.status(500).json({ error: "OPENAI_API_KEY not set" });
     }
-    const { sourceText, style = "standard", sourceLanguage = "Simplified Chinese" } = req.body || {};
+    const { sourceText, style = "standard", sourceLanguage = "Simplified Chinese", givenTranslation = "" } = req.body || {};
+    const fixedTranslation = String(givenTranslation || "").trim();
     if (!sourceText || !String(sourceText).trim()) {
       return res.status(400).json({ error: "empty sourceText" });
     }
