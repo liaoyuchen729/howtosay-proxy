@@ -42,7 +42,8 @@ const ALIASES = T.aliases || {};                 // 旧名 → 规范名
 const TEMPLATE_ENUM = ["", ...TEMPLATE_NAMES];   // 空 = 「都对不上」
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;                 // ← 在 Railway 里设置
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";          // 可在 Railway 改型号
+const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";        // 可在 Railway 改型号
+// gpt-4.1-mini:吞吐约为 4o-mini 的 1.5-2 倍、指令遵循更好、价格相近 —— 翻译主链路提速的关键一环
 // 词典释义专用:量小(按月缓存、全用户共享)但准确性要求高 —— 小模型会对
 // 生僻词×小语种瞎编(如印地语的 sea urchin),用强一档的型号
 const DICT_MODEL = process.env.OPENAI_MODEL_DICT || "gpt-4o";
@@ -165,33 +166,6 @@ function systemPrompt(lang) {
     `then mapping it IS correct.)\n` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
-    `  • definition: the gloss a standard English–${lang} DICTIONARY gives for this word IN THE SENSE used ` +
-    `here — a TRANSLATION, never your own description or explanation. Write exactly what the dictionary ` +
-    `entry would print: "sea urchin"→"ウニ" (NOT "海に生息するウニという生物"). ` +
-    `This rule applies UNIFORMLY to ALL target languages (Simplified Chinese, Traditional ` +
-    `Chinese, Japanese, Korean, Spanish, Portuguese-BR, Hindi, Vietnamese, Indonesian).\n` +
-    `    Strictly FORBIDDEN — meta-phrasings that wrap the meaning instead of stating it:\n` +
-    `      • Japanese:     "Xのこと" / "Xという意味" / "Xを意味する" / "Xという動物" / "Xに住むY"\n` +
-    `      • Chinese (Hans/Hant):  "X的意思" / "X的事情" / "意为X" / "指的是X" / "意思是X"\n` +
-    `      • Korean:       "X라는 뜻" / "X를 의미함" / "X이라는 것"\n` +
-    `      • Spanish:      "que significa X" / "se refiere a X" / "es una X que ..."\n` +
-    `      • Portuguese:   "que significa X" / "refere-se a X" / "é um X que ..."\n` +
-    `      • Hindi:        "X का अर्थ है" / "X का मतलब" / "X होने का अर्थ"\n` +
-    `      • Vietnamese:   "có nghĩa là X" / "nghĩa là X" / "ám chỉ X"\n` +
-    `      • Indonesian:   "yang berarti X" / "artinya X" / "mengacu pada X"\n` +
-    `    Also FORBIDDEN in every language: redundant descriptive padding (e.g. "sea urchin that lives in the ` +
-    `sea", "an animal called dog", "el animal llamado perro").\n` +
-    `    Just write the BARE equivalent. Examples across languages — all describe English "farts":\n` +
-    `      ja: "おなら"   (NOT "おならのこと")\n` +
-    `      zh: "屁"       (NOT "屁的意思" / "屁这个东西")\n` +
-    `      ko: "방귀"     (NOT "방귀라는 뜻")\n` +
-    `      es: "pedos"    (NOT "los pedos que uno suelta")\n` +
-    `      pt: "peidos"   (NOT "os peidos que se soltam")\n` +
-    `      hi: "पाद"      (NOT "पाद का अर्थ है")\n` +
-    `      vi: "rắm"      (NOT "có nghĩa là rắm")\n` +
-    `      id: "kentut"   (NOT "yang berarti kentut")\n` +
-    `    Length cap: at most ONE short clause. CJK ≤ ~8 chars, Korean ≤ ~10 chars, Latin/Devanagari ≤ ~6 words, ` +
-    `Vietnamese/Indonesian ≤ ~6 words. Going longer means you are over-explaining.\n` +
     `  • isGrammarStructure: true ONLY when this unit is itself a MULTI-WORD grammar pattern such as ` +
     `"had better", "wouldn't have done", "be supposed to", "prefer X to Y", "to go" (the infinitive marker). ` +
     `For ordinary single-word vocabulary — common nouns, verbs, adjectives, adverbs, including inflected forms ` +
@@ -257,7 +231,7 @@ function systemPrompt(lang) {
     `Every triggerWord must be literally present in your translation.\n` +
     `  • name: if templateKey != "" → "". If templateKey == "" → a short grammar-point name IN ${lang} ` +
     `(e.g. "prefer X to Y 句型"). Do NOT write any explanation here — details are fetched separately.\n\n` +
-    `All definitions (and any ${lang} text) MUST be written in ${lang}, never in any other language.`;
+    `Any ${lang} text (e.g. fallback grammar-point names) MUST be written in ${lang}, never in any other language.`;
 }
 
 const exampleSchema = {
@@ -265,18 +239,20 @@ const exampleSchema = {
   properties: { en: { type: "string" }, cn: { type: "string" } },
   required: ["en", "cn"], additionalProperties: false
 };
-// 注意:words 里不再带 examples —— 例句改为用户点开词详情时按需生成(/word-example),
-// 这让 /translate 的输出体量减半以上,从根本上消除超时;也只为用户真正查看的词花例句的钱。
+// 注意:words 里不再带 examples 和 definition ——
+// · 例句:点开词详情按需生成(/word-example,按月缓存)
+// · 释义:点开词详情按需查询(/word-definition,词典口径、永久缓存)
+// /translate 只回"立刻要显示"的最小数据:译文 + 词块 + 对齐 + 语法引用,
+// 输出小 = 生成快 = 不超时;详情的 token 只为真正点开的词花。
 const wordSchema = {
   type: "object",
   properties: {
     english: { type: "string" },
     partOfSpeech: { type: "string", enum: POS },
     sourceSpan: { type: "string" },
-    definition: { type: "string" },
     isGrammarStructure: { type: "boolean" }
   },
-  required: ["english","partOfSpeech","sourceSpan","definition","isGrammarStructure"],
+  required: ["english","partOfSpeech","sourceSpan","isGrammarStructure"],
   additionalProperties: false
 };
 // 语法点:/translate 只回最小引用(模板 ID 或 fallback 名 + 触发词)。
@@ -608,11 +584,13 @@ app.post("/translate", async (req, res) => {
       }
       if (fixCount > 0 && process.env.LOG_FIXUPS) console.log(`fixed ${fixCount} spans`);
     }
-    // 兼容字段:words[].examples 不再由模型生成(按需走 /word-example),
-    // 但已安装的旧版 App 解码时要求该字段存在 → 统一补空数组
+    // 兼容字段:words[].examples / definition 不再由模型生成(按需走 /word-example、/word-definition),
+    // 但已安装的旧版 App 解码时要求字段存在 → 统一补空
     if (Array.isArray(parsed.words)) {
       for (const w of parsed.words) {
-        if (w && !Array.isArray(w.examples)) w.examples = [];
+        if (!w) continue;
+        if (!Array.isArray(w.examples)) w.examples = [];
+        if (typeof w.definition !== "string") w.definition = "";
       }
     }
     res.json(parsed);
@@ -629,13 +607,15 @@ const monthKey = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d
 let cacheMonth = monthKey();
 const exampleCache = new Map();  // "lang|english|sense" → {en, cn}
 const grammarCache = new Map();  // "lang|grammarName" → {meaning, structure, examples}
-const defCache     = new Map();  // "lang|english|pos" → {definition}(词典式对译,长期稳定)
+const defCache     = new Map();  // "lang|english|pos" → {definition}(词典式对译)
 const CACHE_MAX = 30000;
 function cacheSweep() {
   if (cacheMonth !== monthKey()) {
+    // 例句/语法详解按月换新(保持新鲜感);
+    // 词典释义【不清】—— 词典是固定的,一个词就那一两个意思,没有"过期"一说。
+    // (进程重启时内存缓存自然清空,首个查询会用 DICT_MODEL 重新生成一次,代价极小)
     exampleCache.clear();
     grammarCache.clear();
-    defCache.clear();
     cacheMonth = monthKey();
   }
 }
