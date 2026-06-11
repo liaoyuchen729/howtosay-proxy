@@ -162,8 +162,10 @@ function systemPrompt(lang) {
     `then mapping it IS correct.)\n` +
     `The words array is in the order of the ENGLISH translation (left to right); sourceSpan values may ` +
     `therefore appear in any order across the source text.\n` +
-    `  • definition: the equivalent ${lang} word or expression. KEEP IT AS SHORT AS POSSIBLE — ideally just ` +
-    `the word itself. This rule applies UNIFORMLY to ALL target languages (Simplified Chinese, Traditional ` +
+    `  • definition: the gloss a standard English–${lang} DICTIONARY gives for this word IN THE SENSE used ` +
+    `here — a TRANSLATION, never your own description or explanation. Write exactly what the dictionary ` +
+    `entry would print: "sea urchin"→"ウニ" (NOT "海に生息するウニという生物"). ` +
+    `This rule applies UNIFORMLY to ALL target languages (Simplified Chinese, Traditional ` +
     `Chinese, Japanese, Korean, Spanish, Portuguese-BR, Hindi, Vietnamese, Indonesian).\n` +
     `    Strictly FORBIDDEN — meta-phrasings that wrap the meaning instead of stating it:\n` +
     `      • Japanese:     "Xのこと" / "Xという意味" / "Xを意味する" / "Xという動物" / "Xに住むY"\n` +
@@ -614,13 +616,15 @@ app.post("/translate", async (req, res) => {
 // 注:内存缓存,Railway 重启/重新部署也会清空,效果等同提前刷新,无碍。
 const monthKey = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth()}`; };
 let cacheMonth = monthKey();
-const exampleCache = new Map();  // "lang|english" → {en, cn}
+const exampleCache = new Map();  // "lang|english|sense" → {en, cn}
 const grammarCache = new Map();  // "lang|grammarName" → {meaning, structure, examples}
+const defCache     = new Map();  // "lang|english|pos" → {definition}(词典式对译,长期稳定)
 const CACHE_MAX = 30000;
 function cacheSweep() {
   if (cacheMonth !== monthKey()) {
     exampleCache.clear();
     grammarCache.clear();
+    defCache.clear();
     cacheMonth = monthKey();
   }
 }
@@ -724,6 +728,64 @@ const grammarDetailSchema = {
   required: ["meaning", "structure", "examples"],
   additionalProperties: false
 };
+// 词典式释义:像标准 英-X 词典一样给对译词,不是模型自由发挥的描述。
+// body: { english, partOfSpeech?, sourceLanguage }   返回: { definition }
+// 同词同语言全用户共享缓存,按月刷新。
+const wordDefinitionSchema = {
+  type: "object",
+  properties: { definition: { type: "string" } },
+  required: ["definition"],
+  additionalProperties: false
+};
+app.post("/word-definition", async (req, res) => {
+  try {
+    if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY not set" });
+    }
+    const { english, partOfSpeech = "", sourceLanguage = "Simplified Chinese" } = req.body || {};
+    if (!english || !String(english).trim()) {
+      return res.status(400).json({ error: "empty english" });
+    }
+    const lang = String(sourceLanguage);
+    cacheSweep();
+    const key = `${lang}|${String(english).trim().toLowerCase()}|${String(partOfSpeech)}`;
+    const hit = defCache.get(key);
+    if (hit) return res.json(hit);
+
+    const prompt =
+      `You are a standard English–${lang} dictionary. Give the dictionary gloss of the English ` +
+      (partOfSpeech ? `${partOfSpeech} ` : "") + `"${String(english)}" in ${lang}.\n` +
+      `Rules:\n` +
+      `- definition: ONLY the ${lang} equivalent word(s), exactly as a printed EN–${lang} dictionary entry ` +
+      `would gloss it. A TRANSLATION, not an explanation or description.\n` +
+      `- NO sentences, NO "a creature that...", NO "Xのこと/Xという生物/X的意思/que significa X", ` +
+      `NO trailing punctuation.\n` +
+      `- If the word has several common senses, give the 1-3 most common glosses separated by "、" ` +
+      `(for CJK) or ", " (for other scripts).\n` +
+      `Examples: "sea urchin" → "ウニ" (Japanese); "farts" → "おなら"; "break" → "壊す、休憩"; ` +
+      `"travel" → "旅行する、移動する".`;
+    const content = await openAIJSON({
+      model: MODEL,
+      temperature: 0.2,
+      messages: [{ role: "user", content: prompt }],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "word_definition", strict: true, schema: wordDefinitionSchema }
+      }
+    });
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { return res.status(502).json({ error: "bad_json" }); }
+    cachePut(defCache, key, parsed);
+    res.json(parsed);
+  } catch (e) {
+    if (e && e.status) return res.status(e.status).json({ error: e.error, detail: e.detail });
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 app.post("/grammar-detail", async (req, res) => {
   try {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
