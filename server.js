@@ -293,7 +293,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v7";
+const SERVER_BUILD = "v8";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -769,6 +769,65 @@ app.post("/translate", async (req, res) => {
         .normalize("NFD").replace(/[̀-ͯ]/g, "");  // 去重音
       const srcFolded = fold(src);
       let fixCount = 0;
+      // F3 兜底:添加的英文强调副词(really/actually...)只许对齐源文「真副词」。
+      // span 不在白名单(9 语言)→ 置空,杜绝 really=美味し 这类形容词错配。
+      const INTENSIFIERS = new Set(["really","actually","truly","just","simply","definitely","certainly"]);
+      const ADV_OK = ["本当に","ほんとうに","ほんとに","本当","実際","実は","マジ",
+        "真的","真","确实","確實","其实","其實","的确","的確","實在","实在",
+        "정말","정말로","진짜","사실","실제로",
+        "realmente","de verdad","en realidad","de hecho","mesmo","de fato",
+        "सच में","सचमुच","वाक़ई","असल में",
+        "thật","thực sự","thật sự","quả thật",
+        "benar-benar","sungguh","memang","sebenarnya"];
+      for (const w of parsed.words) {
+        if (!w || typeof w.english !== "string" || !w.sourceSpan) continue;
+        const eng = w.english.trim().toLowerCase();
+        if (!INTENSIFIERS.has(eng)) continue;
+        const sp = w.sourceSpan;
+        if (!ADV_OK.some(a => sp.includes(a) || a.includes(sp))) {
+          w.sourceSpan = "";
+          fixCount++;
+        }
+      }
+
+      // F2 兜底:同一个 span 被多个词块认领、而原文出现次数不够分时 ——
+      //   ① 日语 〜そう(看起来):系动词拿「そう」,形容词拿词干(おいしそう → looks=そう + delicious=おいし)
+      //   ② 拆不了的:按词性优先级(名词>形容词>动词>副词)保留,其余置空
+      {
+        const LINKING_EN = new Set(["look","looks","looked","seem","seems","seemed","sound","sounds","appear","appears","feel","feels"]);
+        const PRI = { noun: 0, adjective: 1, verb: 2, adverb: 3 };
+        const claimMap = new Map();
+        parsed.words.forEach((w, i) => {
+          if (!w || !w.sourceSpan) return;
+          if (!claimMap.has(w.sourceSpan)) claimMap.set(w.sourceSpan, []);
+          claimMap.get(w.sourceSpan).push(i);
+        });
+        for (const [span, idxs] of claimMap) {
+          if (idxs.length < 2) continue;
+          // 原文出现次数
+          let occ = 0, p = 0;
+          while ((p = src.indexOf(span, p)) !== -1) { occ++; p += span.length; }
+          if (idxs.length <= occ) continue;   // 出现次数够分,客户端各认领一处,无冲突
+          // ① そう 拆分
+          if (span.endsWith("そう") && span.length > 2) {
+            const stem = span.slice(0, -2);
+            const li = idxs.find(i => LINKING_EN.has(parsed.words[i].english.trim().toLowerCase()));
+            const ai = idxs.find(i => parsed.words[i].partOfSpeech === "adjective");
+            if (li != null && ai != null && li !== ai) {
+              parsed.words[li].sourceSpan = "そう";
+              parsed.words[ai].sourceSpan = stem;
+              for (const i of idxs) if (i !== li && i !== ai) parsed.words[i].sourceSpan = "";
+              fixCount++;
+              continue;
+            }
+          }
+          // ② 词性优先级保留 occ 个
+          const sorted = [...idxs].sort((a, b) =>
+            (PRI[parsed.words[a].partOfSpeech] ?? 4) - (PRI[parsed.words[b].partOfSpeech] ?? 4));
+          sorted.slice(occ).forEach(i => { parsed.words[i].sourceSpan = ""; fixCount++; });
+        }
+      }
+
       // 比较结构兜底:模型习惯把比较助词留空(より/보다/比),但 than 的对应是学习者
       // 明确想看的。译文有 than 而模型没对齐时,从源文里把比较标记补上(9 种语言)。
       if (/(^|[^A-Za-z])than([^A-Za-z]|$)/i.test(String(parsed.translation || ""))) {
