@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v23";
+const SERVER_BUILD = "v24";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1167,15 +1167,23 @@ app.post("/translate", async (req, res) => {
           // (c) 日语谓语处理:
           //   形容词过去 〜かった → 切分:was=かった + 形容词=词干(用户金标 #72/#98)
           //   其他屈折(ました/ています)→ 整块合并
+          if (isJaSrc3 && w && grayW(w) && singleW(w) && AUX.has(engOf(w))) {
+            // 允许中间隔一个灰色程度副词:was [more] difficult = 難しかった
+            const DEG = new Set(["more", "less", "really", "very", "so", "quite", "pretty"]);
+            let mid = null, tgt = ws[i + 1], step = 2;
+            if (tgt && grayW(tgt) && singleW(tgt) && DEG.has(engOf(tgt))) { mid = tgt; tgt = ws[i + 2]; step = 3; }
+            if (tgt && tgt.sourceSpan && tgt.sourceSpan.length >= 5 && singleW(tgt) &&
+                ["verb", "adjective"].includes(tgt.partOfSpeech) &&
+                tgt.sourceSpan.endsWith("かった")) {
+              w.sourceSpan = "かった";
+              tgt.sourceSpan = tgt.sourceSpan.slice(0, -3);
+              outArr.push(w); if (mid) outArr.push(mid); outArr.push(tgt);
+              i += step; fixCount++; continue;
+            }
+          }
           if (isJaSrc3 && w && grayW(w) && singleW(w) && AUX.has(engOf(w)) &&
               n1 && n1.sourceSpan && n1.sourceSpan.length >= 3 && singleW(n1) &&
               ["verb", "adjective"].includes(n1.partOfSpeech)) {
-            if (n1.sourceSpan.endsWith("かった") && n1.sourceSpan.length >= 5) {
-              w.sourceSpan = "かった";
-              n1.sourceSpan = n1.sourceSpan.slice(0, -3);
-              outArr.push(w); outArr.push(n1);
-              i += 2; fixCount++; continue;
-            }
             outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: n1.partOfSpeech,
               sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
             i += 2; fixCount++; continue;
@@ -1183,6 +1191,21 @@ app.post("/translate", async (req, res) => {
           outArr.push(w); i++;
         }
         parsed.words = outArr;
+      }
+
+      // 中文动词 span 尾随代词剥离(用户金标:asked=让我 → 让):
+      // 代词字属于英文的 me/him,不属于动词本体
+      if (/chinese/i.test(String(sourceLanguage))) {
+        const PRON_TAIL = /[我你他她它您]$/;
+        const EN_PRON = new Set(["me","him","her","us","them","you","it","i","he","she","we","they"]);
+        for (const w of parsed.words) {
+          if (!w || !w.sourceSpan || w.sourceSpan.length < 2) continue;
+          if (EN_PRON.has(String(w.english).trim().toLowerCase())) continue;
+          if (PRON_TAIL.test(w.sourceSpan) && w.sourceSpan.length >= 2) {
+            w.sourceSpan = w.sourceSpan.slice(0, -1);
+            fixCount++;
+          }
+        }
       }
 
       // will 将来标记回填(用户金标:will=就要):译文有未对齐的 will,
