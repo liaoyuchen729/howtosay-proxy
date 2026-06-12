@@ -38,7 +38,14 @@ const GOLD = [
     G(["morning"],["早上"]), G(["seven"],["七","七点"]), G(["every"],["每天","每"]) ]],
   ["Simplified Chinese","请把窗户关上,有点冷。",[
     G(["window"],["窗户"]), G(["close","shut"],["关","关上"]), G(["cold","chilly"],["冷"]) ]],
-  // —— 日语 12 句 ——
+  // —— 用户人工标注新增(2026-06-12)——
+  ["Simplified Chinese","今天地铁挤死了,我差点没上去。",[
+    G(["make it on","on"],["上去"]), G(["subway"],["地铁"]), G(["packed","crowded"],["挤死了","挤"]) ]],
+  ["Simplified Chinese","我先睡了,明天还得早起赶飞机。",[
+    G(["get up","up"],["起","早起"]), G(["flight","plane"],["飞机"]), G(["early"],["早","早起"]) ]],
+  ["Simplified Chinese","只要你肯努力,就一定能成功。",[
+    G(["work hard","hard"],["努力"]), G(["succeed"],["成功"]), G(["as long as"],["只要"]) ]],
+    // —— 日语 12 句 ——
   ["Japanese","このことは思っていたよりずっと難しい。",[
     G(["than"],["より"]), G(["harder","difficult"],["難しい","難し"]),
     G(["way","much"],["ずっと"]), G(["this"],["このこと","これ"]), G(["thought","expected"],["思っていた","思った"]) ]],
