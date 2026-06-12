@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v25";
+const SERVER_BUILD = "v26";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1042,6 +1042,8 @@ app.post("/translate", async (req, res) => {
         const LINKING_EN = new Set(["look","looks","looked","seem","seems","seemed","sound","sounds","appear","appears","feel","feels"]);
         const PRI = { noun: 0, adjective: 1, verb: 2, adverb: 3 };
         const mergeRanges = [];   // [起, 止, 合并后的span]
+        // 单字符助词判断(拆分余数的修剪用)
+        const LEADTRIM_OK = (ch) => ["の","は","が","を","に","で","と","へ","的","了","着","过","은","는","이","가","을","를","의"].includes(ch);
         // 合并窗口校验:claimants 之外的中间词必须是空对齐的小功能词
         const MID_OK = new Set(["it","a","an","the","of","to","me","him","her","us","them","my","your","his","its","our","their","up","on","in","out"]);
         const mergeWindowOK = (lo, hi, claimants) => {
@@ -1103,13 +1105,27 @@ app.post("/translate", async (req, res) => {
             if (j === i) continue;
             const b = parsed.words[j];
             if (!b || !b.sourceSpan || b.sourceSpan === a.sourceSpan) continue;
-            if (a.sourceSpan.includes(b.sourceSpan) &&
-                mergeWindowOK(Math.min(i, j), Math.max(i, j), [i, j])) {
-              mergeRanges.push([Math.min(i, j), Math.max(i, j), a.sourceSpan]);
-            } else if (a.sourceSpan.includes(b.sourceSpan)) {
-              // 不能合并 → 被包含的小 span 置灰(宁缺勿错)
-              b.sourceSpan = "";
-              fixCount++;
+            if (a.sourceSpan.includes(b.sourceSpan)) {
+              // 先试拆分:B 是 A 的干净前缀/后缀 → A 保留余数,B 保留自身
+              // (about=就这个 ⊃ this=这个 → about=就;非死记,纯结构判据)
+              let remainder = null;
+              if (a.sourceSpan.endsWith(b.sourceSpan)) remainder = a.sourceSpan.slice(0, -b.sourceSpan.length);
+              else if (a.sourceSpan.startsWith(b.sourceSpan)) remainder = a.sourceSpan.slice(b.sourceSpan.length);
+              if (remainder !== null) {
+                // 余数剥头尾助词(子供の頃 ⊃ 子供 → 余数 の頃 → 頃)
+                while (remainder.length > 1 && LEADTRIM_OK(remainder[0])) remainder = remainder.slice(1);
+                while (remainder.length > 1 && LEADTRIM_OK(remainder[remainder.length - 1])) remainder = remainder.slice(0, -1);
+              }
+              if (remainder && remainder.length >= 1 && !LEADTRIM_OK(remainder)) {
+                a.sourceSpan = remainder;
+                fixCount++;
+              } else if (mergeWindowOK(Math.min(i, j), Math.max(i, j), [i, j])) {
+                // 余数不连续/为空 → 真习语,整块合并(keep it short = 长话短说)
+                mergeRanges.push([Math.min(i, j), Math.max(i, j), a.sourceSpan]);
+              } else {
+                b.sourceSpan = "";
+                fixCount++;
+              }
             }
           }
         }
@@ -1176,6 +1192,16 @@ app.post("/translate", async (req, res) => {
             outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: "verb",
               sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
             i += 2; fixCount++; continue;
+          }
+          // (c2) 通用:灰 get/become/turn/grow + 形容词(带span) → 块(用户:get mad=生气)
+          {
+            const GETV = new Set(["get", "gets", "got", "getting", "become", "becomes", "became", "turn", "turned", "grow", "grew"]);
+            if (w && grayW(w) && singleW(w) && GETV.has(engOf(w)) &&
+                n1 && n1.sourceSpan && singleW(n1) && n1.partOfSpeech === "adjective") {
+              outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: "adjective",
+                sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+              i += 2; fixCount++; continue;
+            }
           }
           // (c) 日语谓语处理:
           //   形容词过去 〜かった → 切分:was=かった + 形容词=词干(用户金标 #72/#98)
