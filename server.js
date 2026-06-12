@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v20b";
+const SERVER_BUILD = "v21";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -840,6 +840,20 @@ app.post("/translate", async (req, res) => {
         }
       }
 
+      // F6.4 日语完了后缀修剪(用户金标 #65:missed=乗り遅れちゃった → 乗り遅れ):
+      // ちゃった/てしまった 是"(遗憾地)…了"的补助成分,不属于动词本体
+      if (/japanese/i.test(String(sourceLanguage))) {
+        const COMPLETIVE = /(ちゃった|じゃった|ちゃいました|てしまった|でしまった|てしまいました|でしまいました)$/;
+        for (const w of parsed.words) {
+          if (!w || typeof w.sourceSpan !== "string" || !w.sourceSpan) continue;
+          const m = w.sourceSpan.match(COMPLETIVE);
+          if (m && w.sourceSpan.length - m[0].length >= 2) {
+            w.sourceSpan = w.sourceSpan.slice(0, -m[0].length);
+            fixCount++;
+          }
+        }
+      }
+
       // F6.5 使役助词守卫:让/使/令 只许对齐 let/make/have/get,
       // 冒充实义动词的(keep=让)置空,交给 F7 词典锚定重新补齐
       {
@@ -1144,6 +1158,17 @@ app.post("/translate", async (req, res) => {
           outArr.push(w); i++;
         }
         parsed.words = outArr;
+      }
+
+      // will 将来标记回填(用户金标:will=就要):译文有未对齐的 will,
+      // 源文有无歧义的将来标记(就要/将要/将)→ 补上。单字 就/会 歧义大,不碰。
+      if (/chinese/i.test(String(sourceLanguage))) {
+        const wWill = parsed.words.find(x => x && !x.sourceSpan &&
+          ["will", "'ll"].includes(String(x.english).trim().toLowerCase()));
+        if (wWill) {
+          const m = src.match(/就要|将要|將要|将|將/);
+          if (m) { wWill.sourceSpan = m[0]; fixCount++; }
+        }
       }
 
       // 比较结构兜底:模型习惯把比较助词留空(より/보다/比),但 than 的对应是学习者
