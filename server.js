@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v24";
+const SERVER_BUILD = "v25";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -850,12 +850,25 @@ app.post("/translate", async (req, res) => {
       // F6.4 日语完了后缀修剪(用户金标 #65:missed=乗り遅れちゃった → 乗り遅れ):
       // ちゃった/てしまった 是"(遗憾地)…了"的补助成分,不属于动词本体
       if (/japanese/i.test(String(sourceLanguage))) {
-        const COMPLETIVE = /(ちゃった|じゃった|ちゃいました|てしまった|でしまった|てしまいました|でしまいました)$/;
+        // 统一规则(用户金标 #65 + #73):剥 しまった/ちゃった,保留 て
+        //   乗り遅れちゃった → 乗り遅れ;食べられてしまった → 食べられて;寝てしまいました → 寝て
+        const COMPLETIVE = [
+          [/(?<=て|で)(しまった|しまいました)$/, 0],   // て 保留
+          [/(ちゃった|ちゃいました|じゃった|じゃいました)$/, 0],
+          [/まま$/, 0],                                  // 開けたまま → 開けた
+        ];
         for (const w of parsed.words) {
           if (!w || typeof w.sourceSpan !== "string" || !w.sourceSpan) continue;
-          const m = w.sourceSpan.match(COMPLETIVE);
-          if (m && w.sourceSpan.length - m[0].length >= 2) {
-            w.sourceSpan = w.sourceSpan.slice(0, -m[0].length);
+          for (const [re] of COMPLETIVE) {
+            const m = w.sourceSpan.match(re);
+            if (m && w.sourceSpan.length - m[0].length >= 2) {
+              w.sourceSpan = w.sourceSpan.slice(0, -m[0].length);
+              fixCount++;
+            }
+          }
+          // すぎて → すぎ(too=すぎ,金标 #88)
+          if (w.sourceSpan.endsWith("すぎて")) {
+            w.sourceSpan = w.sourceSpan.slice(0, -1);
             fixCount++;
           }
         }
@@ -1203,6 +1216,29 @@ app.post("/translate", async (req, res) => {
           if (EN_PRON.has(String(w.english).trim().toLowerCase())) continue;
           if (PRON_TAIL.test(w.sourceSpan) && w.sourceSpan.length >= 2) {
             w.sourceSpan = w.sourceSpan.slice(0, -1);
+            fixCount++;
+          }
+        }
+      }
+
+      // 日语回填:please=ください;指示词 this/that=この/その/あの(区域内唯一才动手)
+      if (/japanese/i.test(String(sourceLanguage))) {
+        const wPlease = parsed.words.find(x => x && !x.sourceSpan &&
+          String(x.english).trim().toLowerCase() === "please");
+        if (wPlease && /(ください|下さい)/.test(src)) {
+          wPlease.sourceSpan = src.includes("ください") ? "ください" : "下さい";
+          fixCount++;
+        }
+        const DEMO = { this: ["この", "これ"], that: ["その", "あの", "それ", "あれ"],
+                       these: ["これら"], those: ["それら", "あれら"] };
+        for (const w of parsed.words) {
+          if (!w || w.sourceSpan) continue;
+          const eng = String(w.english).trim().toLowerCase();
+          const cands = DEMO[eng];
+          if (!cands) continue;
+          const found = cands.filter(c => src.includes(c));
+          if (found.length === 1 && src.split(found[0]).length === 2) {
+            w.sourceSpan = found[0];
             fixCount++;
           }
         }
