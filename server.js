@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v20";
+const SERVER_BUILD = "v20b";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1110,10 +1110,11 @@ app.post("/translate", async (req, res) => {
         let i = 0;
         while (i < ws.length) {
           const w = ws[i], n1 = ws[i + 1], n2 = ws[i + 2];
-          // (a)
-          if (w && w.sourceSpan && singleW(w) && w.partOfSpeech === "verb" &&
+          // (a) 动词/形容词(带span,单词或已合并块) + 灰小品词/it → 吸收
+          if (w && w.sourceSpan && ["verb", "adjective"].includes(w.partOfSpeech) &&
+              /^[a-z' ]+$/i.test((w.english || "").trim()) &&
               singleW(n1) && grayW(n1) && (PART.has(engOf(n1)) || engOf(n1) === "it")) {
-            outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: "verb",
+            outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: w.partOfSpeech,
               sourceSpan: w.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
             i += 2; fixCount++; continue;
           }
