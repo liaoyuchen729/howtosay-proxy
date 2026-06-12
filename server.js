@@ -299,7 +299,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v11";
+const SERVER_BUILD = "v12";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -848,36 +848,47 @@ app.post("/translate", async (req, res) => {
           }
           for (const w of parsed.words) {
             if (!w || typeof w.english !== "string" || !CONTENT.has(w.partOfSpeech)) continue;
-            // 词典候选(zh 含简繁;ja 额外加去尾活用形:食べる→食べ)
-            const cands = [];
+            // 词典候选:fullCands = 词典完整词;prefixCands = 日语去尾活用形(仅用于补齐!)
+            const fullCands = [];
+            const prefixCands = [];
             for (const lemma of lemmaCandidates(w.english)) {
               const hit = dict[lemma];
               if (!hit || !hit.length) continue;
               for (const h of hit) {
                 for (const c of (isJaSrc ? [h] : [h[0], h[1]])) {
                   if (!c) continue;
-                  cands.push(c);
-                  if (isJaSrc && c.length > 2) cands.push(c.slice(0, -1));
+                  fullCands.push(c);
+                  if (isJaSrc && c.length > 2) prefixCands.push(c.slice(0, -1));
                 }
               }
               break;
             }
-            if (!cands.length) continue;
+            if (!fullCands.length) continue;
             if (w.sourceSpan) {
-              // 收窄
-              const inSpan = cands.filter(c => c.length < w.sourceSpan.length && w.sourceSpan.includes(c));
+              // 收窄 —— 三道闸门(v11 事故教训:结果→果、うんこ→うん 全是这里干的):
+              //   ① span 本身已是词典完整词 → 一个字都不许动
+              //   ② 只许用词典完整词修剪,人造去尾前缀不参与
+              //   ③ 修剪后至少比原 span 短 2 字(只砍真正的"过宽",不做同义词替换)
+              if (fullCands.includes(w.sourceSpan)) continue;
+              const inSpan = fullCands.filter(c =>
+                w.sourceSpan.length - c.length >= 2 && w.sourceSpan.includes(c));
               if (inSpan.length) {
                 inSpan.sort((a, b) => b.length - a.length);
                 w.sourceSpan = inSpan[0];
                 fixCount++;
               }
             } else {
-              // 补齐(≥2 字防巧合;必须出现在未认领区域;唯一候选才动手)
-              const found = [...new Set(cands.filter(c => c.length >= 2 && masked.includes(c)))];
-              if (found.length === 1) {
-                w.sourceSpan = found[0];
-                masked = masked.split(found[0]).join("▯".repeat(found[0].length));
-                fixCount++;
+              // 补齐(≥2 字防巧合;必须出现在未认领区域;唯一候选才动手;
+              //  先试完整词,再试活用前缀)
+              for (const pool of [fullCands, prefixCands]) {
+                const found = [...new Set(pool.filter(c => c.length >= 2 && masked.includes(c)))];
+                if (found.length === 1) {
+                  w.sourceSpan = found[0];
+                  masked = masked.split(found[0]).join("▯".repeat(found[0].length));
+                  fixCount++;
+                  break;
+                }
+                if (found.length > 1) break;  // 有歧义,放弃,不赌
               }
             }
           }
