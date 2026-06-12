@@ -299,7 +299,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v10";
+const SERVER_BUILD = "v11";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -814,6 +814,73 @@ app.post("/translate", async (req, res) => {
           if (!m) continue;
           const w = parsed.words.find(x => x && !x.sourceSpan && engs.includes(String(x.english).trim().toLowerCase()));
           if (w) { w.sourceSpan = m[0]; fixCount++; }
+        }
+      }
+
+      // F6.5 使役助词守卫:让/使/令 只许对齐 let/make/have/get,
+      // 冒充实义动词的(keep=让)置空,交给 F7 词典锚定重新补齐
+      {
+        const CAUSATIVE = new Set(["让", "讓", "使", "令", "叫"]);
+        const CAUS_EN = new Set(["let", "make", "made", "have", "get", "makes", "lets"]);
+        for (const w of parsed.words) {
+          if (!w || typeof w.english !== "string" || !w.sourceSpan) continue;
+          if (CAUSATIVE.has(w.sourceSpan.trim()) &&
+              !CAUS_EN.has(w.english.trim().toLowerCase())) {
+            w.sourceSpan = "";
+            fixCount++;
+          }
+        }
+      }
+
+      // F7 词典锚定校正(日/中,零成本):用本地真词典修正模型的对齐
+      //   收窄:span 比词典译词宽 → 修剪(rain=雨が降りそう → 雨)
+      //   补齐:实词没对齐但其词典译词在源文里独一无二地存在 → 赋值(keep → 保持)
+      {
+        const isJaSrc = /japanese/i.test(String(sourceLanguage));
+        const isZhSrc = /chinese/i.test(String(sourceLanguage));
+        const dict = isJaSrc ? DICT_JA : (isZhSrc ? DICT_ZH : null);
+        if (dict) {
+          const CONTENT = new Set(["noun", "verb", "adjective", "adverb"]);
+          // 已认领区域打码,防止把别人 span 内部的子串(图书馆里的 书)再分出去
+          let masked = src;
+          for (const x of parsed.words) {
+            if (x && x.sourceSpan) masked = masked.split(x.sourceSpan).join("▯".repeat(x.sourceSpan.length));
+          }
+          for (const w of parsed.words) {
+            if (!w || typeof w.english !== "string" || !CONTENT.has(w.partOfSpeech)) continue;
+            // 词典候选(zh 含简繁;ja 额外加去尾活用形:食べる→食べ)
+            const cands = [];
+            for (const lemma of lemmaCandidates(w.english)) {
+              const hit = dict[lemma];
+              if (!hit || !hit.length) continue;
+              for (const h of hit) {
+                for (const c of (isJaSrc ? [h] : [h[0], h[1]])) {
+                  if (!c) continue;
+                  cands.push(c);
+                  if (isJaSrc && c.length > 2) cands.push(c.slice(0, -1));
+                }
+              }
+              break;
+            }
+            if (!cands.length) continue;
+            if (w.sourceSpan) {
+              // 收窄
+              const inSpan = cands.filter(c => c.length < w.sourceSpan.length && w.sourceSpan.includes(c));
+              if (inSpan.length) {
+                inSpan.sort((a, b) => b.length - a.length);
+                w.sourceSpan = inSpan[0];
+                fixCount++;
+              }
+            } else {
+              // 补齐(≥2 字防巧合;必须出现在未认领区域;唯一候选才动手)
+              const found = [...new Set(cands.filter(c => c.length >= 2 && masked.includes(c)))];
+              if (found.length === 1) {
+                w.sourceSpan = found[0];
+                masked = masked.split(found[0]).join("▯".repeat(found[0].length));
+                fixCount++;
+              }
+            }
+          }
         }
       }
 
