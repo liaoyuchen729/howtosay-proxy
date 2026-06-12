@@ -303,7 +303,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v15";
+const SERVER_BUILD = "v16";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -902,6 +902,51 @@ app.post("/translate", async (req, res) => {
         }
       }
 
+      // F8 短语库对齐(用户提案):词典里 15.9万(ja)/6.3万(zh) 个多词短语键,
+      // 译文的 2-4 词窗口命中短语键、且其词典译文真实出现在源文未认领区域
+      // → 整块合并为【可收藏短语】,对齐到词典译文。铁条件 = 译文+源文双命中,精确性极高。
+      {
+        const isJaSrc2 = /japanese/i.test(String(sourceLanguage));
+        const isZhSrc2 = /chinese/i.test(String(sourceLanguage));
+        if ((isJaSrc2 || isZhSrc2) && (isJaSrc2 ? DICT_JA : DICT_ZH)) {
+          let masked2 = src;
+          for (const x of parsed.words) {
+            if (x && x.sourceSpan) masked2 = masked2.split(x.sourceSpan).join("▯".repeat(x.sourceSpan.length));
+          }
+          const isWordTok = (w) => w && typeof w.english === "string" &&
+            /^[A-Za-z']+$/.test(w.english.trim()) && !/\s/.test(w.english.trim());
+          for (const n of [4, 3, 2]) {
+            for (let i = 0; i + n <= parsed.words.length; i++) {
+              const win = parsed.words.slice(i, i + n);
+              if (!win.every(isWordTok)) continue;
+              const phrase = win.map(x => x.english.trim()).join(" ");
+              const cands = dictCandidates(phrase, sourceLanguage);
+              if (!cands) continue;
+              // 窗口自己的 span 先解除打码(合并后会被替换)
+              let zone = masked2;
+              for (const x of win) {
+                if (x.sourceSpan) zone = zone.split("▯".repeat(x.sourceSpan.length)).join(x.sourceSpan);
+              }
+              const hit = cands.find(c => c.length >= 2 && zone.includes(c));
+              if (!hit) continue;
+              parsed.words.splice(i, n, {
+                english: phrase,
+                partOfSpeech: (win.find(x => ["verb","noun","adjective","adverb"].includes(x.partOfSpeech)) || win[0]).partOfSpeech,
+                sourceSpan: hit,
+                definition: "",
+                isGrammarStructure: false,   // 短语,可收藏
+                examples: []
+              });
+              masked2 = src;
+              for (const x of parsed.words) {
+                if (x && x.sourceSpan) masked2 = masked2.split(x.sourceSpan).join("▯".repeat(x.sourceSpan.length));
+              }
+              fixCount++;
+            }
+          }
+        }
+      }
+
       // F3 兜底:添加的英文强调副词(really/actually...)只许对齐源文「真副词」。
       // span 不在白名单(9 语言)→ 置空,杜绝 really=美味し 这类形容词错配。
       const INTENSIFIERS = new Set(["really","actually","truly","just","simply","definitely","certainly"]);
@@ -1211,6 +1256,26 @@ function lemmaCandidates(raw) {
   }
   return out;
 }
+// 词典候选(原始数组):短语合并等确定性逻辑用
+function dictCandidates(english, sourceLanguage) {
+  const isJa = /japanese/i.test(sourceLanguage);
+  const isZh = /chinese/i.test(sourceLanguage);
+  if (!isJa && !isZh) return null;
+  const dict = isJa ? DICT_JA : DICT_ZH;
+  if (!dict) return null;
+  for (const lemma of lemmaCandidates(english)) {
+    const hit = dict[lemma];
+    if (!hit || !hit.length) continue;
+    const out = [];
+    for (const h of hit) {
+      if (isJa) { out.push(h); if (h.length > 2) out.push(h.slice(0, -1)); }
+      else { out.push(h[0]); if (h[1] && h[1] !== h[0]) out.push(h[1]); }
+    }
+    return out;
+  }
+  return null;
+}
+
 // 词典查询:命中返回释义字符串,未命中返回 null
 function dictLookup(english, sourceLanguage) {
   const isJa = /japanese/i.test(sourceLanguage);
