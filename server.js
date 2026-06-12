@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v18";
+const SERVER_BUILD = "v18b";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -407,7 +407,7 @@ const STRUCTURE_DETECTORS = [
     trig: ["gonna", "going", "to"] },
   { re: /\b(ain't|wanna|gotta|kinda|lemme|gimme)\b/i,
     tpl: "缩略式(I'm / don't / would've)",
-    trig: ["ain't", "wanna", "gotta", "kinda", "lemme", "gimme", "gonna"] },
+    trig: ["ain't", "wanna", "gotta", "kinda", "lemme", "gimme"] },
 ].filter(d => TEMPLATE_NAMES.includes(d.tpl));  // 模板不存在的条目静默剔除
 
 // 弱词模板的结构正则:这些模板名里的英文全是超常见词(the/as/so/that),
