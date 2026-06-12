@@ -303,7 +303,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v16";
+const SERVER_BUILD = "v17";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -729,7 +729,10 @@ app.post("/translate", async (req, res) => {
           //   · 模板名含语法标记词(句型/从句/时态/被动/虚拟...) → 语法块
           //   · 纯英文短语+释义的模板(get rid of/give up/长话短说类合并块) → 短语,可收藏
           const re = new RegExp(`(^|[^A-Za-z])${escRe(eng)}([^A-Za-z]|$)`, "i");
-          const tplHit = TEMPLATE_NAMES.find(n => re.test(n));
+          // 词形容错:looks forward to ↔ look forward to(用词组匹配器反查)
+          const chunkMatcher = makeTemplateMatcher(eng);
+          const tplHit = TEMPLATE_NAMES.find(n => re.test(n) ||
+            (/[A-Za-z]/.test(n) && chunkMatcher(n) === true && n.split(/\s+/).filter(t => /^[A-Za-z']+$/.test(t)).length >= 2));
           if (tplHit) {
             const GRAMMARY = /句型|句式|从句|时态|一般(现在|过去|将来)|进行|完成|被动|虚拟|比较级|最高级|疑问|感叹|否定|祈使|倒装|强调句|形式(主语|宾语)|系动词|情态|不定式|动名词|分词|引导|名词性|定语|状语|表语|关联连词|语态|冠词|代词|连词|助动词|时间介词|地点介词/;
             w.isGrammarStructure = GRAMMARY.test(tplHit);
