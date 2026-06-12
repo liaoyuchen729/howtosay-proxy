@@ -55,10 +55,11 @@ const POS = ["noun","verb","adjective","adverb","pronoun","preposition","conjunc
 function styleDesc(style) {
   switch (style) {
     case "casual":
-      return "very casual, the way a young native speaker would actually say it to a friend in chat or speech. " +
-        "Use contractions (I'm, you're, don't, won't, gonna, wanna, kinda), informal vocabulary, sentence " +
-        "fragments where natural, and conversational markers (like, you know, hey, yeah). " +
-        "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.' / 'She's such a sweetheart.' " +
+      return "casual and natural, the way a native speaker would say it to a friend. " +
+        "Use contractions (I'm, don't, gonna, wanna) and informal vocabulary where natural. " +
+        "Do NOT prepend greetings or fillers (Hey / So / Well / Look) unless the source itself contains one — " +
+        "casual means natural WORDING, not ADDED content. Translate only what the source says. " +
+        "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.' " +
         "AVOID textbook phrasings.";
     case "formal":
       return "formal, polished, and polite — the way you would write a professional email or speak in a business " +
@@ -303,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v17";
+const SERVER_BUILD = "v18";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -401,6 +402,12 @@ const STRUCTURE_DETECTORS = [
   { re: /\b(wonder|wondering|wondered|know|knows|ask|asks|asked|sure)\s+(if|whether)\b/i,
     tpl: "whether / if 引导的名词性从句",
     trig: ["if", "whether"] },
+  { re: /\b(gonna|going\s+to)\s+[A-Za-z]/i,
+    tpl: "一般将来时(be going to)",
+    trig: ["gonna", "going", "to"] },
+  { re: /\b(ain't|wanna|gotta|kinda|lemme|gimme)\b/i,
+    tpl: "缩略式(I'm / don't / would've)",
+    trig: ["ain't", "wanna", "gotta", "kinda", "lemme", "gimme", "gonna"] },
 ].filter(d => TEMPLATE_NAMES.includes(d.tpl));  // 模板不存在的条目静默剔除
 
 // 弱词模板的结构正则:这些模板名里的英文全是超常见词(the/as/so/that),
@@ -1361,8 +1368,10 @@ app.post("/word-example", async (req, res) => {
         `is a hard failure.\n` : "") +
       `Return:\n` +
       `- en: one natural English sentence (8-14 words) that uses "${String(english)}" exactly as given.\n` +
-      `- cn: its ${lang} translation. The translation MUST contain the ${lang} rendering of "${String(english)}" ` +
-      `in that same sense — never paraphrase the key word away. Write cn ONLY in ${lang}.`;
+      `- cn: its ${lang} translation, written 100% in ${lang}. The cn MUST express the meaning of ` +
+      `"${String(english)}" in that same sense using ${lang} words — NEVER leave the English word itself ` +
+      `inside the cn sentence (wrong: "这 ain't 是..."; right: render its meaning). ` +
+      `Never paraphrase the key word away either.`;
     const content = await openAIJSON({
       model: MODEL,
       temperature: 0.7,
@@ -1439,6 +1448,9 @@ app.post("/word-definition", async (req, res) => {
       `would gloss it. A TRANSLATION, not an explanation or description.\n` +
       `- NO sentences, NO "a creature that...", NO "Xのこと/Xという生物/X的意思/que significa X", ` +
       `NO trailing punctuation.\n` +
+      `- CONTRACTIONS / informal short forms (ain't, gonna, wanna, gotta): START with the full form, ` +
+      `then the gloss in ${lang}. E.g. ain't → "= am not / is not / are not + ${lang} gloss"; ` +
+      `gonna → "= going to + ${lang} gloss". The learner must see what it is short FOR.\n` +
       `- If the word has several common senses, give the 1-3 most common glosses separated by "、" ` +
       `(for CJK) or ", " (for other scripts).\n` +
       `Examples: "sea urchin" → "ウニ" (Japanese); "farts" → "おなら"; "break" → "壊す、休憩"; ` +
