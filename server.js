@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v22";
+const SERVER_BUILD = "v23";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -899,7 +899,7 @@ app.post("/translate", async (req, res) => {
               const hit = dict[lemma];
               if (!hit || !hit.length) continue;
               for (const h of hit) {
-                for (const c of (isJaSrc ? [h] : [h[0], h[1]])) {
+                for (const c of (isJaSrc ? h.split("\u2016") : [h[0], h[1]])) {
                   if (!c) continue;
                   fullCands.push(c);
                   if (isJaSrc && c.length > 2) prefixCands.push(c.slice(0, -1));
@@ -1394,7 +1394,9 @@ function dictCandidates(english, sourceLanguage) {
     if (!hit || !hit.length) continue;
     const out = [];
     for (const h of hit) {
-      if (isJa) { out.push(h); if (h.length > 2) out.push(h.slice(0, -1)); }
+      if (isJa) {
+        for (const f of h.split("\u2016")) { out.push(f); if (f.length > 2) out.push(f.slice(0, -1)); }
+      }
       else { out.push(h[0]); if (h[1] && h[1] !== h[0]) out.push(h[1]); }
     }
     return out;
@@ -1413,7 +1415,7 @@ function dictLookup(english, sourceLanguage) {
   for (const cand of lemmaCandidates(english)) {
     const hit = dict[cand];
     if (!hit || !hit.length) continue;
-    if (isJa) return hit.slice(0, 2).join("、");
+    if (isJa) return hit.slice(0, 2).map(h => h.split("\u2016")[0]).join("、");
     return hit.slice(0, 2).map(pair => isZhHant ? pair[1] : pair[0]).join("、");
   }
   return null;

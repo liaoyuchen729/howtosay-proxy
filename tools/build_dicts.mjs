@@ -51,9 +51,8 @@ for (const e of entries) {
       if (!ng) continue;
       for (const key of [ng.key, ng.extraKey].filter(Boolean)) {
         if (!jaIndex.has(key)) jaIndex.set(key, []);
-        wordForms.forEach((word, wi) => {
-          jaIndex.get(key).push({ word, score: score * 10 - si - wi - (ng.hadQualifier ? 50 : 0) });
-        });
+        jaIndex.get(key).push({ word: wordForms.join("\u2016"),
+          score: score * 10 - si - (ng.hadQualifier ? 50 : 0) });
       }
     }
   });
@@ -63,7 +62,7 @@ const jaOut = {};
 for (const [k, arr] of jaIndex) {
   arr.sort((a, b) => b.score - a.score);
   const seen = new Set(); const top = [];
-  for (const { word } of arr) { if (!seen.has(word)) { seen.add(word); top.push(word); if (top.length === 8) break; } }
+  for (const { word } of arr) { if (!seen.has(word)) { seen.add(word); top.push(word); if (top.length === 5) break; } }
   jaOut[k] = top;
 }
 console.log("EN→JA 键数:", Object.keys(jaOut).length);
@@ -100,7 +99,7 @@ for (const [k, arr] of zhIndex) {
   const seen = new Set(); const top = [];
   for (const { trad, simp } of arr) {
     if (seen.has(simp)) continue; seen.add(simp);
-    top.push([simp, trad]); if (top.length === 8) break;
+    top.push([simp, trad]); if (top.length === 5) break;
   }
   zhOut[k] = top;   // [[简, 繁], ...]
 }
