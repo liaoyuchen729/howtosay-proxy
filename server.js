@@ -303,7 +303,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v14";
+const SERVER_BUILD = "v15";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -930,6 +930,19 @@ app.post("/translate", async (req, res) => {
         const LINKING_EN = new Set(["look","looks","looked","seem","seems","seemed","sound","sounds","appear","appears","feel","feels"]);
         const PRI = { noun: 0, adjective: 1, verb: 2, adverb: 3 };
         const mergeRanges = [];   // [起, 止, 合并后的span]
+        // 合并窗口校验:claimants 之外的中间词必须是空对齐的小功能词
+        const MID_OK = new Set(["it","a","an","the","of","to","me","him","her","us","them","my","your","his","its","our","their","up","on","in","out"]);
+        const mergeWindowOK = (lo, hi, claimants) => {
+          for (let k = lo + 1; k < hi; k++) {
+            if (claimants.includes(k)) continue;
+            const m = parsed.words[k];
+            if (!m || typeof m.english !== "string") return false;
+            const e = m.english.trim().toLowerCase();
+            if (m.sourceSpan) return false;                       // 有自己对齐的词不许卷入
+            if (!/^[a-z']+$/.test(e) || !MID_OK.has(e)) return false;  // 标点/语气词/实词不许卷入
+          }
+          return true;
+        };
         const claimMap = new Map();
         parsed.words.forEach((w, i) => {
           if (!w || !w.sourceSpan) return;
@@ -955,10 +968,12 @@ app.post("/translate", async (req, res) => {
               continue;
             }
           }
-          // ② 相邻认领者 → 合并成一个词块(习语整块对整块:keep it short = 长话短说),
-          //    比置灰保留更多信息;非相邻的才走词性优先级置灰
+          // ② 相邻认领者 → 合并成一个词块(习语整块对整块:keep it short = 长话短说)。
+          //    中间词必须是「空对齐的小功能词」才能被卷入(it/the/of...);
+          //    有标点/语气词夹在中间(so yeah , long 事故)→ 放弃合并,走置灰兜底
           const sortedIdx = [...idxs].sort((a, b) => a - b);
-          if (sortedIdx[sortedIdx.length - 1] - sortedIdx[0] <= 3) {
+          if (sortedIdx[sortedIdx.length - 1] - sortedIdx[0] <= 3 &&
+              mergeWindowOK(sortedIdx[0], sortedIdx[sortedIdx.length - 1], idxs)) {
             mergeRanges.push([sortedIdx[0], sortedIdx[sortedIdx.length - 1], span]);
             continue;
           }
@@ -976,8 +991,13 @@ app.post("/translate", async (req, res) => {
             if (j === i) continue;
             const b = parsed.words[j];
             if (!b || !b.sourceSpan || b.sourceSpan === a.sourceSpan) continue;
-            if (a.sourceSpan.includes(b.sourceSpan)) {
+            if (a.sourceSpan.includes(b.sourceSpan) &&
+                mergeWindowOK(Math.min(i, j), Math.max(i, j), [i, j])) {
               mergeRanges.push([Math.min(i, j), Math.max(i, j), a.sourceSpan]);
+            } else if (a.sourceSpan.includes(b.sourceSpan)) {
+              // 不能合并 → 被包含的小 span 置灰(宁缺勿错)
+              b.sourceSpan = "";
+              fixCount++;
             }
           }
         }
