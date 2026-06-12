@@ -159,6 +159,10 @@ function systemPrompt(lang) {
     `Only map 让→let/make when "let"/"make" literally appears in your translation.\n` +
     `    E3. Chinese V得 complement (唱得好听 / 跑得快): the verb maps to the VERB ONLY (sings=唱 or 唱歌), ` +
     `the adverb maps to the complement (well=好听). Never include 得 or the complement in the verb's span.\n` +
+    `    F1.5 IDIOM ↔ IDIOM: when a fixed source idiom is translated by a fixed English expression ` +
+    `(长话短说 → "keep it short"; 落汤鸡 → "drenched to the bone"), output the English expression as ONE ` +
+    `multi-word unit aligned to the WHOLE idiom. Never distribute an idiom across separate English words ` +
+    `(keep=长话短说 + short=短 is WRONG — the idiom's meaning does not decompose).\n` +
     `    F2. ONE span, ONE unit: two different units MUST NOT claim the same source span occurrence. ` +
     `Split it: Japanese "おいしそう" → "delicious"="おいし" + "looks"="そう" (そう = looks/seems suffix); ` +
     `Korean "맛있어 보여" → "delicious"="맛있어", "looks"="보여". Giving both words the same full span is wrong.\n` +
@@ -299,7 +303,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v12";
+const SERVER_BUILD = "v13";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -922,6 +926,7 @@ app.post("/translate", async (req, res) => {
       {
         const LINKING_EN = new Set(["look","looks","looked","seem","seems","seemed","sound","sounds","appear","appears","feel","feels"]);
         const PRI = { noun: 0, adjective: 1, verb: 2, adverb: 3 };
+        const mergeRanges = [];   // [起, 止, 合并后的span]
         const claimMap = new Map();
         parsed.words.forEach((w, i) => {
           if (!w || !w.sourceSpan) return;
@@ -947,10 +952,53 @@ app.post("/translate", async (req, res) => {
               continue;
             }
           }
-          // ② 词性优先级保留 occ 个
+          // ② 相邻认领者 → 合并成一个词块(习语整块对整块:keep it short = 长话短说),
+          //    比置灰保留更多信息;非相邻的才走词性优先级置灰
+          const sortedIdx = [...idxs].sort((a, b) => a - b);
+          if (sortedIdx[sortedIdx.length - 1] - sortedIdx[0] <= 3) {
+            mergeRanges.push([sortedIdx[0], sortedIdx[sortedIdx.length - 1], span]);
+            continue;
+          }
+          // ③ 词性优先级保留 occ 个
           const sorted = [...idxs].sort((a, b) =>
             (PRI[parsed.words[a].partOfSpeech] ?? 4) - (PRI[parsed.words[b].partOfSpeech] ?? 4));
           sorted.slice(occ).forEach(i => { parsed.words[i].sourceSpan = ""; fixCount++; });
+        }
+
+        // 嵌套 span 检测(keep=长话短说 ⊃ short=短):相邻窗口内一个词的 span 包含另一个的 → 合并
+        for (let i = 0; i < parsed.words.length; i++) {
+          const a = parsed.words[i];
+          if (!a || !a.sourceSpan || a.sourceSpan.length < 3) continue;
+          for (let j = Math.max(0, i - 3); j <= Math.min(parsed.words.length - 1, i + 3); j++) {
+            if (j === i) continue;
+            const b = parsed.words[j];
+            if (!b || !b.sourceSpan || b.sourceSpan === a.sourceSpan) continue;
+            if (a.sourceSpan.includes(b.sourceSpan)) {
+              mergeRanges.push([Math.min(i, j), Math.max(i, j), a.sourceSpan]);
+            }
+          }
+        }
+
+        // 执行合并(从后往前,避免索引漂移;区间重叠的先到先得)
+        mergeRanges.sort((x, y) => y[0] - x[0]);
+        const taken = new Set();
+        for (const [lo, hi, span] of mergeRanges) {
+          let clash = false;
+          for (let k = lo; k <= hi; k++) if (taken.has(k)) clash = true;
+          if (clash || hi <= lo) continue;
+          for (let k = lo; k <= hi; k++) taken.add(k);
+          const segment = parsed.words.slice(lo, hi + 1);
+          const mergedEnglish = segment.map(x => x.english).join(" ").replace(/\s+/g, " ").trim();
+          const firstContent = segment.find(x => ["verb","noun","adjective","adverb"].includes(x.partOfSpeech));
+          parsed.words.splice(lo, hi - lo + 1, {
+            english: mergedEnglish,
+            partOfSpeech: firstContent ? firstContent.partOfSpeech : "unknown",
+            sourceSpan: span,
+            definition: "",
+            isGrammarStructure: false,   // 词汇性短语,可收藏
+            examples: []
+          });
+          fixCount++;
         }
       }
 
