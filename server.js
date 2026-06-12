@@ -303,7 +303,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v13";
+const SERVER_BUILD = "v14";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -724,14 +724,17 @@ app.post("/translate", async (req, res) => {
         const eng = w.english.trim();
         if (!/\s/.test(eng)) {
           w.isGrammarStructure = false;
-        } else if (!w.isGrammarStructure) {
-          // 多词单元出现在某个模板名里("as if" ⊂ "as if / as though + 从句")
-          // → 它是已知语法块,强制标记;模型这次没标也不影响(②.5 会补详解条目)。
-          // "ice cream" 这类词组不在模板名里,保持可收藏。
+        } else {
+          // 多词单元的「短语 vs 语法」分类(用户定义:短语可收藏,语法不可):
+          //   · 模板名含语法标记词(句型/从句/时态/被动/虚拟...) → 语法块
+          //   · 纯英文短语+释义的模板(get rid of/give up/长话短说类合并块) → 短语,可收藏
           const re = new RegExp(`(^|[^A-Za-z])${escRe(eng)}([^A-Za-z]|$)`, "i");
-          if (TEMPLATE_NAMES.some(n => re.test(n))) {
-            w.isGrammarStructure = true;
+          const tplHit = TEMPLATE_NAMES.find(n => re.test(n));
+          if (tplHit) {
+            const GRAMMARY = /句型|句式|从句|时态|一般(现在|过去|将来)|进行|完成|被动|虚拟|比较级|最高级|疑问|感叹|否定|祈使|倒装|强调句|形式(主语|宾语)|系动词|情态|不定式|动名词|分词|引导|名词性|定语|状语|表语|关联连词|语态|冠词|代词|连词|助动词|时间介词|地点介词/;
+            w.isGrammarStructure = GRAMMARY.test(tplHit);
           }
+          // 模板里没有的多词单元:保持模型判断(语法块如 might break 仍是 true)
         }
       }
     }
