@@ -19,7 +19,7 @@ const GOLD = [
     G(["taller"],["高"]), G(["than"],["比"]), G(["much","way"],["得多","多"]) ]],
   ["Simplified Chinese","我们打算明年去日本旅行。",[
     G(["japan"],["日本"]), G(["travel","trip"],["旅行"]), G(["plan","planning"],["打算"]),
-    G(["next"],["明年","明"]), G(["year"],["明年","年"]) ]],
+    G(["next"],["明年","明",""]), G(["year"],["明年","年"]) ]],
   ["Simplified Chinese","这个问题太难了,我答不上来。",[
     G(["difficult","hard"],["难","太难"]), G(["question"],["问题"]),
     G(["answer"],["答","回答","答不上来"]) ]],
@@ -68,7 +68,7 @@ const GOLD = [
     G(["hungry"],["お腹が空いた","空いた"]), G(["eat"],["食べ","食べたい"]) ]],
   ["Japanese","この写真は去年京都で撮りました。",[
     G(["photo","picture"],["写真"]), G(["kyoto"],["京都"]),
-    G(["last"],["去年","去"]), G(["year"],["去年","年"]), G(["took","taken"],["撮り","撮りました"]) ]],
+    G(["last"],["去年","去",""]), G(["year"],["去年","年"]), G(["took","taken"],["撮り","撮りました"]) ]],
 ];
 
 const model = process.argv.find(a=>a.startsWith("--model="))?.slice(8);

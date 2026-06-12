@@ -153,6 +153,12 @@ function systemPrompt(lang) {
     `word for, set sourceSpan="". Don't grab it just to "have something there".\n` +
     `    F. Keep each sourceSpan to the MINIMAL substring carrying that meaning. Do not include neighboring ` +
     `words. For "すきじゃない" → "don't like": "like"="すき", "don't"="じゃない".\n` +
+    `    E2. Causative 让/使/令 (Chinese), させる/させ (Japanese), 하게 (Korean): when the translation ` +
+    `uses a plain verb instead of let/make ("让它保持这个速度" → "keep it at this speed"), the English verb ` +
+    `maps to the verb AFTER the causative (keep=保持), and 让/使 itself gets sourceSpan="". ` +
+    `Only map 让→let/make when "let"/"make" literally appears in your translation.\n` +
+    `    E3. Chinese V得 complement (唱得好听 / 跑得快): the verb maps to the VERB ONLY (sings=唱 or 唱歌), ` +
+    `the adverb maps to the complement (well=好听). Never include 得 or the complement in the verb's span.\n` +
     `    F2. ONE span, ONE unit: two different units MUST NOT claim the same source span occurrence. ` +
     `Split it: Japanese "おいしそう" → "delicious"="おいし" + "looks"="そう" (そう = looks/seems suffix); ` +
     `Korean "맛있어 보여" → "delicious"="맛있어", "looks"="보여". Giving both words the same full span is wrong.\n` +
@@ -293,7 +299,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v9";
+const SERVER_BUILD = "v10";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
