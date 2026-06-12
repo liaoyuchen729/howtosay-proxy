@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v18b";
+const SERVER_BUILD = "v19";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -477,7 +477,13 @@ async function callOpenAI(body) {
     signal: AbortSignal.timeout(55_000)
   });
   try {
-    return await doFetch();
+    const r = await doFetch();
+    // 429(限流)大多是秒级窗口:等 2.5 秒重试一次,用户无感
+    if (r.status === 429) {
+      await new Promise(res => setTimeout(res, 2500));
+      return await doFetch();
+    }
+    return r;
   } catch (e) {
     if (e.name === "TimeoutError" || e.name === "AbortError") throw e; // 超时不重试,直接报错
     return await doFetch(); // 瞬时网络错误重试一次
