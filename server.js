@@ -293,7 +293,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v8";
+const SERVER_BUILD = "v9";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -482,7 +482,7 @@ app.post("/translate", async (req, res) => {
     }
 
     const body = {
-      model: MODEL,
+      model: (req.body && typeof req.body.debugModel === "string" && req.body.debugModel) || MODEL,
       temperature: 0.3,
       messages: [
         { role: "system", content: systemPrompt(sourceLanguage) },
@@ -769,6 +769,48 @@ app.post("/translate", async (req, res) => {
         .normalize("NFD").replace(/[̀-ͯ]/g, "");  // 去重音
       const srcFolded = fold(src);
       let fixCount = 0;
+      // F4 兜底:添加的感叹词/招呼语(Hey/Oh/Wow,口语风格常加)不许抢实词的对齐。
+      // 源文真有感叹词(嘿/喂/ねえ/야...)才允许对齐。(实测事故:Hey=你)
+      const INTERJECTIONS = new Set(["hey","hi","hello","oh","wow","yeah","yep","nah","nope","ah","aha","hmm","huh","gosh","geez","man","dude"]);
+      const SRC_INTERJ = ["嘿","喂","哎","唉","哇","呀","喔","哦","欸","诶","ね","ねえ","ねぇ","おい","あの","やあ","おお","わあ","야","어","와","오","이봐","oye","eh","ey","olá","oi","ei","अरे","ओह","này","ơi","ồ","hei","wah","eh"];
+      for (const w of parsed.words) {
+        if (!w || typeof w.english !== "string" || !w.sourceSpan) continue;
+        const eng = w.english.trim().toLowerCase();
+        if (!INTERJECTIONS.has(eng)) continue;
+        const sp = w.sourceSpan;
+        if (!SRC_INTERJ.some(a => sp === a || sp.includes(a))) {
+          w.sourceSpan = "";
+          fixCount++;
+        }
+      }
+
+      // F5 兜底:纯标点词块(, . ? !)永远不对齐、不算语法块
+      for (const w of parsed.words) {
+        if (!w || typeof w.english !== "string") continue;
+        if (/^[^A-Za-z0-9]+$/.test(w.english.trim())) {
+          if (w.sourceSpan) { w.sourceSpan = ""; fixCount++; }
+          w.isGrammarStructure = false;
+        }
+      }
+
+      // F6 兜底:中文 A不A 疑问式(能不能/会不会/是不是...)→ 对应英文情态/助动词。
+      // 模型常把它们漏成灰色;源文有 A不A、译文的对应词没对齐时,确定性补上。
+      {
+        const ANOTA = [
+          [/能不能|可不可以|能否/, ["can", "could"]],
+          [/会不会|會不會/, ["will", "would", "might"]],
+          [/是不是/, ["is", "are", "right"]],
+          [/要不要/, ["want", "do", "shall"]],
+          [/行不行|好不好/, ["okay", "ok", "alright"]],
+        ];
+        for (const [re, engs] of ANOTA) {
+          const m = src.match(re);
+          if (!m) continue;
+          const w = parsed.words.find(x => x && !x.sourceSpan && engs.includes(String(x.english).trim().toLowerCase()));
+          if (w) { w.sourceSpan = m[0]; fixCount++; }
+        }
+      }
+
       // F3 兜底:添加的英文强调副词(really/actually...)只许对齐源文「真副词」。
       // span 不在白名单(9 语言)→ 置空,杜绝 really=美味し 这类形容词错配。
       const INTENSIFIERS = new Set(["really","actually","truly","just","simply","definitely","certainly"]);
