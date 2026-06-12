@@ -32,8 +32,9 @@ for (const e of entries) {
   // 词形:优先第一个 keb(汉字),否则第一个 reb(假名)
   const keb = e.match(/<keb>([^<]+)<\/keb>/);
   const reb = e.match(/<reb>([^<]+)<\/reb>/);
-  const word = keb ? `${keb[1]}` : (reb ? reb[1] : null);
-  if (!word) continue;
+  // 汉字形 + 假名读音都入候选(源文常用假名书写:たくさん vs 沢山)
+  const wordForms = [...new Set([keb && keb[1], reb && reb[1]].filter(Boolean))];
+  if (!wordForms.length) continue;
   // priority 分数:news1/ichi1/spec1=3, news2/ichi2/spec2/gai1=2, nfXX=1, 无=0
   let score = 0;
   for (const m of e.matchAll(/<(?:ke|re)_pri>([^<]+)<\/(?:ke|re)_pri>/g)) {
@@ -50,7 +51,9 @@ for (const e of entries) {
       if (!ng) continue;
       for (const key of [ng.key, ng.extraKey].filter(Boolean)) {
         if (!jaIndex.has(key)) jaIndex.set(key, []);
-        jaIndex.get(key).push({ word, score: score * 10 - si - (ng.hadQualifier ? 50 : 0) });
+        wordForms.forEach((word, wi) => {
+          jaIndex.get(key).push({ word, score: score * 10 - si - wi - (ng.hadQualifier ? 50 : 0) });
+        });
       }
     }
   });
