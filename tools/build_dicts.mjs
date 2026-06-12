@@ -9,13 +9,17 @@ import { gunzipSync, gzipSync } from 'zlib';
 // —— 英文 gloss 规范化:小写、去括号注释、去 to/a/the 前缀 ——
 function normGloss(g) {
   const hadQualifier = /[({]/.test(g);   // 带括号限定语的释义(口语/贬义/方言)排序降权
-  let s = g.toLowerCase().trim();
-  s = s.replace(/\([^)]*\)/g, " ").replace(/\{[^}]*\}/g, " ");
-  s = s.replace(/^to\s+/, "").replace(/^(a|an|the)\s+/, "");
-  s = s.replace(/[^a-z'\- ]/g, " ").replace(/\s+/g, " ").trim();
+  let raw = g.toLowerCase().trim();
+  raw = raw.replace(/\([^)]*\)/g, " ").replace(/\{[^}]*\}/g, " ");
+  raw = raw.replace(/[^a-z'\- ]/g, " ").replace(/\s+/g, " ").trim();
+  // 剥前缀键(to do 类不定式释义用):to the point → point
+  let s = raw.replace(/^to\s+/, "").replace(/^(a|an|the)\s+/, "");
   if (!s || s.length < 2) return null;
   if (s.split(" ").length > 4) return null;
-  return { key: s, hadQualifier };
+  // 习语保护:剥了前缀的多词释义,原始完整形态也要入索引
+  // ("to the point"/"a piece of cake" 这类以 to/a/the 开头的习语,剥掉就毁了)
+  const extraKey = (raw !== s && raw.includes(" ") && raw.split(" ").length <= 4) ? raw : null;
+  return { key: s, hadQualifier, extraKey };
 }
 
 // ========== JMdict ==========
@@ -44,9 +48,10 @@ for (const e of entries) {
     for (const g of s.matchAll(/<gloss>([^<]+)<\/gloss>/g)) {
       const ng = normGloss(g[1]);
       if (!ng) continue;
-      const key = ng.key;
-      if (!jaIndex.has(key)) jaIndex.set(key, []);
-      jaIndex.get(key).push({ word, score: score * 10 - si - (ng.hadQualifier ? 50 : 0) });
+      for (const key of [ng.key, ng.extraKey].filter(Boolean)) {
+        if (!jaIndex.has(key)) jaIndex.set(key, []);
+        jaIndex.get(key).push({ word, score: score * 10 - si - (ng.hadQualifier ? 50 : 0) });
+      }
     }
   });
 }
@@ -79,10 +84,10 @@ for (let line of ced.split("\n")) {
     if (/^(variant of|old variant|see [A-Za-z一-鿿]|abbr\.|CL:)/.test(g)) return;
     const ng = normGloss(g);
     if (!ng) return;
-    const key = ng.key;
-    if (!zhIndex.has(key)) zhIndex.set(key, []);
-    // CEDICT 无词频:首义优先 + 短词微弱加分;带括号限定语大幅降权
-    zhIndex.get(key).push({ trad, simp, score: -gi * 10 - simp.length - (ng.hadQualifier ? 100 : 0) });
+    for (const key of [ng.key, ng.extraKey].filter(Boolean)) {
+      if (!zhIndex.has(key)) zhIndex.set(key, []);
+      zhIndex.get(key).push({ trad, simp, score: -gi * 10 - simp.length - (ng.hadQualifier ? 100 : 0) });
+    }
   });
 }
 console.log("CEDICT 行数:", lines);
