@@ -63,7 +63,7 @@ const jaOut = {};
 for (const [k, arr] of jaIndex) {
   arr.sort((a, b) => b.score - a.score);
   const seen = new Set(); const top = [];
-  for (const { word } of arr) { if (!seen.has(word)) { seen.add(word); top.push(word); if (top.length === 5) break; } }
+  for (const { word } of arr) { if (!seen.has(word)) { seen.add(word); top.push(word); if (top.length === 8) break; } }
   jaOut[k] = top;
 }
 console.log("EN→JA 键数:", Object.keys(jaOut).length);
@@ -100,7 +100,7 @@ for (const [k, arr] of zhIndex) {
   const seen = new Set(); const top = [];
   for (const { trad, simp } of arr) {
     if (seen.has(simp)) continue; seen.add(simp);
-    top.push([simp, trad]); if (top.length === 5) break;
+    top.push([simp, trad]); if (top.length === 8) break;
   }
   zhOut[k] = top;   // [[简, 繁], ...]
 }
