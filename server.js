@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v21";
+const SERVER_BUILD = "v22";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -750,7 +750,14 @@ app.post("/translate", async (req, res) => {
             const GRAMMARY = /句型|句式|从句|时态|一般(现在|过去|将来)|进行|完成|被动|虚拟|比较级|最高级|疑问|感叹|否定|祈使|倒装|强调句|形式(主语|宾语)|系动词|情态|不定式|动名词|分词|引导|名词性|定语|状语|表语|关联连词|语态|冠词|代词|连词|助动词|时间介词|地点介词/;
             w.isGrammarStructure = GRAMMARY.test(tplHit);
           }
-          // 模板里没有的多词单元:保持模型判断(语法块如 might break 仍是 true)
+          // 模板里没有的多词单元:含情态/助动/比较标记 → 语法;否则默认短语(可收藏)
+          // (用户金标 #91:hang out 是短语不是语法)
+          if (!tplHit && w.isGrammarStructure) {
+            const GRAM_TOK = new Set(["might","may","would","could","should","must","will","shall",
+              "have","has","had","been","being","be","than","if","whether"]);
+            const toks = eng.toLowerCase().split(/\s+/);
+            w.isGrammarStructure = toks.some(t => GRAM_TOK.has(t));
+          }
         }
       }
     }
@@ -950,7 +957,17 @@ app.post("/translate", async (req, res) => {
               const win = parsed.words.slice(i, i + n);
               if (!win.every(isWordTok)) continue;
               const phrase = win.map(x => x.english.trim()).join(" ");
-              const cands = dictCandidates(phrase, sourceLanguage);
+              let cands = dictCandidates(phrase, sourceLanguage);
+              // 变体:去掉中间的宾语代词再查(dropping me off → drop off)
+              if (!cands && n >= 3) {
+                const OBJ = new Set(["me","him","her","us","them","you","it"]);
+                const inner = win.slice(1, -1);
+                if (inner.some(x => OBJ.has(x.english.trim().toLowerCase()))) {
+                  const reduced = win.filter((x, k) => k === 0 || k === n - 1 ||
+                    !OBJ.has(x.english.trim().toLowerCase())).map(x => x.english.trim()).join(" ");
+                  cands = dictCandidates(reduced, sourceLanguage);
+                }
+              }
               if (!cands) continue;
               // 窗口自己的 span 先解除打码(合并后会被替换)
               let zone = masked2;
@@ -1147,10 +1164,18 @@ app.post("/translate", async (req, res) => {
               sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
             i += 2; fixCount++; continue;
           }
-          // (c) 日语谓语整块
+          // (c) 日语谓语处理:
+          //   形容词过去 〜かった → 切分:was=かった + 形容词=词干(用户金标 #72/#98)
+          //   其他屈折(ました/ています)→ 整块合并
           if (isJaSrc3 && w && grayW(w) && singleW(w) && AUX.has(engOf(w)) &&
               n1 && n1.sourceSpan && n1.sourceSpan.length >= 3 && singleW(n1) &&
               ["verb", "adjective"].includes(n1.partOfSpeech)) {
+            if (n1.sourceSpan.endsWith("かった") && n1.sourceSpan.length >= 5) {
+              w.sourceSpan = "かった";
+              n1.sourceSpan = n1.sourceSpan.slice(0, -3);
+              outArr.push(w); outArr.push(n1);
+              i += 2; fixCount++; continue;
+            }
             outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: n1.partOfSpeech,
               sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
             i += 2; fixCount++; continue;
