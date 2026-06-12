@@ -481,7 +481,7 @@
 - [ ] The = (灰)
 - [ ] weather = 天气
 - [ ] forecast = 预报
-- [ ] says = 说明
+- [x] says = 说
 - [ ] there = (灰)
 - [ ] will = (灰)
 - [ ] be = (灰)
@@ -494,7 +494,7 @@
 
 - [ ] My = (灰)
 - [ ] passport = 护照
-- [ ] will = (灰)
+- [x] will = 就要
 - [ ] expire = 过期
 - [ ] next month〔短语〕 = 下个月
 
@@ -532,8 +532,8 @@
 - [ ] 's = (灰)
 - [ ] braised pork〔短语〕 = 红烧肉
 - [ ] smells = 香
-- [ ] way = 多
-- [ ] better = (灰)
+- [x] way = 多
+- [x] better = (灰)
 - [ ] than = 比
 - [ ] the = (灰)
 - [ ] restaurant = 饭店
@@ -571,12 +571,12 @@
 - [ ] package = 快递
 - [ ] 's = (灰)
 - [ ] here = 到了
-- [ ] can = 帮我
+- [x] can = (灰)
 - [ ] you = (灰)
 - [ ] grab = 拿
 - [ ] it = (灰)
-- [ ] for = 一下
-- [ ] me = (灰)
+- [x] for = 一下
+- [x] me = (灰)
 
 ## 45. 他说话总是拐弯抹角的。
 > He always beats around the bush when he talks.
@@ -595,10 +595,10 @@
 - [ ] the = (灰)
 - [ ] habit = 习惯
 - [ ] of = (灰)
-- [ ] going = (灰)
-- [ ] to = (灰)
-- [ ] bed = (灰)
-- [ ] early = 早睡
+- [x] going = (灰)
+- [x] to = (灰)
+- [x] bed = (灰)
+- [x] early = 早
 - [ ] and = (灰)
 - [ ] getting up early〔短语〕 = 早起
 - [ ] is = (灰)
@@ -626,8 +626,8 @@
 - [ ] I = (灰)
 - [ ] had reviewed〔语法〕 = 复习
 - [ ] a = (灰)
-- [ ] little = 多
-- [ ] longer = 一会儿
+- [x] little = 一会儿
+- [x] longer = 多
 - [ ] at = (灰)
 - [ ] that = (灰)
 - [ ] time = 时
@@ -674,8 +674,8 @@
 - [ ] Alright = 行了
 - [ ] alright = 行了
 - [ ] I = (灰)
-- [ ] get = 知道了
-- [ ] it = (灰)
+- [x] get = 知道了
+- [x] it = (灰)
 - [ ] stop = 别
 - [ ] nagging = 唠叨了
 
@@ -741,7 +741,7 @@
 - [ ] discuss = 讨论
 - [ ] this = 这个
 - [ ] question = 问题
-- [ ] another = 再
+- [x] another = 改
 - [ ] day = 天
 
 ## 57. 我减肥失败了,又胖回去了。
@@ -750,19 +750,19 @@
 - [ ] I = (灰)
 - [ ] failed = 减肥失败了
 - [ ] at = (灰)
-- [ ] losing weight〔短语〕 = (灰)
+- [x] losing weight〔短语〕 = 减肥
 - [ ] and = (灰)
-- [ ] gained = 胖回去了
+- [x] gained = 胖
 - [ ] it = (灰)
-- [ ] all = 又
-- [ ] back = (灰)
-- [ ] again = (灰)
+- [x] all = 
+- [x] back = 回去
+- [x] again = 又
 
 ## 58. 按照说明书一步一步来就行。
 > Just follow the instructions step by step.
 
 - [ ] Just = (灰)
-- [ ] follow = 来
+- [x] follow = 按照
 - [ ] the = (灰)
 - [ ] instructions = 说明书
 - [ ] step by step〔语法〕 = 一步一步
@@ -817,12 +817,12 @@
 > I'm wiped out today, so I'm just gonna crash.
 
 - [ ] I'm = (灰)
-- [ ] wiped = 疲れた
-- [ ] out = (灰)
+- [x] wiped = 疲れた
+- [x] out = (灰)
 - [ ] today = 今日
 - [ ] so = から
 - [ ] I'm = (灰)
-- [ ] just = (灰)
+- [ ] just = 
 - [ ] gonna = (灰)
 - [ ] crash = 寝る
 
@@ -839,7 +839,7 @@
 > I missed the train.
 
 - [ ] I = (灰)
-- [ ] missed = 乗り遅れちゃった
+- [x] missed = 乗り遅れ
 - [ ] the = (灰)
 - [ ] train = 電車
 
@@ -908,8 +908,8 @@
 > I was happy to be praised by the teacher.
 
 - [ ] I = (灰)
-- [ ] was = (灰)
-- [ ] happy = 嬉しかった
+- [x] was = かった
+- [x] happy = 嬉し
 - [ ] to be〔短语〕 = (灰)
 - [ ] praised = 褒められて
 - [ ] by = (灰)
@@ -921,9 +921,11 @@
 
 - [ ] My = (灰)
 - [ ] younger brother〔短语〕 = 弟
-- [ ] ate = 食べられてしまった
+- [x] ate = 食べられてしまった
 - [ ] the = (灰)
 - [ ] cake = ケーキ
+
+<!-- 以下 74-100 已用 v20b 重新生成于 再生成 -->
 
 ## 74. 日本に行ったことがありますか?
 > Have you ever been to Japan?
@@ -951,17 +953,16 @@
 - [ ] The = (灰)
 - [ ] more = ほど
 - [ ] you = (灰)
-- [ ] try = 頑張れ
-- [ ] hard = 頑張る
+- [ ] try hard〔短语〕 = 頑張れ
 - [ ] the = (灰)
-- [ ] better = 上手
+- [ ] better = 上手に
 - [ ] you = (灰)
 - [ ] become = なります
 
 ## 77. 雨が降らないうちに帰りましょう。
-> Let's go home before it starts raining.
+> Let us go home before it starts raining.
 
-- [ ] Let's = (灰)
+- [ ] Let us〔语法〕 = (灰)
 - [ ] go home〔短语〕 = 帰りましょう
 - [ ] before = うちに
 - [ ] it = (灰)
@@ -972,8 +973,8 @@
 
 - [ ] He = (灰)
 - [ ] might = かもしれません
-- [ ] not = ない
-- [ ] come = 来
+- [ ] not = (灰)
+- [ ] come = 来ない
 
 ## 79. この漢字の読み方を教えてください。
 > Please tell me how to read this kanji.
@@ -990,8 +991,7 @@
 
 - [ ] The = (灰)
 - [ ] meeting = 会議
-- [ ] is = (灰)
-- [ ] scheduled = ことになっています
+- [ ] is scheduled〔短语〕 = ことになっています
 - [ ] to start〔短语〕 = 始まる
 - [ ] at = (灰)
 - [ ] three = 三
@@ -1003,27 +1003,25 @@
 - [ ] A = (灰)
 - [ ] new = 新
 - [ ] cafe = カフェ
-- [ ] has = (灰)
-- [ ] opened = できました
-- [ ] near = の近くに
+- [ ] has opened〔短语〕 = できました
+- [ ] near = 近くに
 - [ ] the = (灰)
 - [ ] station = 駅
 
 ## 82. 昨日の夜、友達と電話で二時間も話しました。
-> Last night, I talked on the phone with my friend for two hours.
+> I talked on the phone with my friend for two hours last night.
 
-- [ ] Last night〔短语〕 = 昨日の夜
 - [ ] I = (灰)
-- [ ] talked = 話しました
-- [ ] on = (灰)
+- [ ] talked on〔短语〕 = 話しました
 - [ ] the = (灰)
 - [ ] phone = 電話
-- [ ] with = と
+- [ ] with = (灰)
 - [ ] my = (灰)
 - [ ] friend = 友達
 - [ ] for = (灰)
 - [ ] two = 二
 - [ ] hours = 時間
+- [ ] last night〔短语〕 = 昨日の夜
 
 ## 83. この薬は食後に飲んでください。
 > Please take this medicine after meals.
@@ -1072,8 +1070,7 @@
 - [ ] but = (灰)
 - [ ] the = (灰)
 - [ ] snowy scenery〔短语〕 = 雪景
-- [ ] is = (灰)
-- [ ] beautiful = きれい
+- [ ] is beautiful〔短语〕 = きれい
 
 ## 87. 彼女は英語も中国語も話せます。
 > She can speak both English and Chinese.
@@ -1105,8 +1102,7 @@
 
 - [ ] Could = (灰)
 - [ ] you = (灰)
-- [ ] make = なりません
-- [ ] it = (灰)
+- [ ] make it〔短语〕 = なりません
 - [ ] a little〔短语〕 = 少し
 - [ ] cheaper = 安く
 
@@ -1131,7 +1127,7 @@
 - [ ] this = 今度の
 - [ ] Sunday = 日曜
 - [ ] come = 来て
-- [ ] hang out〔短语〕 = 遊びに
+- [ ] hang out〔语法〕 = 遊びに
 
 ## 92. あの映画、泣けるって聞いたけど本当?
 > I heard that movie's a tearjerker, is that true?
@@ -1144,8 +1140,7 @@
 - [ ] a = (灰)
 - [ ] tearjerker = 泣ける
 - [ ] is = (灰)
-- [ ] that = (灰)
-- [ ] true = 本当
+- [ ] that true〔短语〕 = 本当
 
 ## 93. ダイエット中なのにケーキ食べちゃった。
 > I ended up eating cake even though I'm on a diet.
@@ -1155,12 +1150,12 @@
 - [ ] cake = ケーキ
 - [ ] even though〔短语〕 = なのに
 - [ ] I'm = (灰)
-- [ ] on = 中
+- [ ] on = (灰)
 - [ ] a = (灰)
-- [ ] diet = ダイエット
+- [ ] diet = ダイエット中
 
 ## 94. スマホの調子が悪くて困ってる。
-> My phone's acting up and it's really annoying.
+> My phone's acting up and it's driving me nuts.
 
 - [ ] My = (灰)
 - [ ] phone = スマホ
@@ -1168,16 +1163,19 @@
 - [ ] acting up〔短语〕 = 調子が悪くて
 - [ ] and = (灰)
 - [ ] it's = (灰)
-- [ ] really = (灰)
-- [ ] annoying = 困ってる
+- [ ] driving = 困ってる
+- [ ] me = (灰)
+- [ ] nuts = (灰)
 
 ## 95. 駅まで送ってくれてありがとう。
-> Thanks for giving me a ride to the station.
+> Thanks for dropping me off at the station.
 
 - [ ] Thanks = ありがとう
 - [ ] for = (灰)
-- [ ] giving me a ride〔短语〕 = 送ってくれて
-- [ ] to = まで
+- [ ] dropping = 送って
+- [ ] me = (灰)
+- [ ] off = (灰)
+- [ ] at = まで
 - [ ] the = (灰)
 - [ ] station = 駅
 
@@ -1186,8 +1184,8 @@
 
 - [ ] Please = (灰)
 - [ ] do = (灰)
-- [ ] not = ない
-- [ ] forget = 忘れ
+- [ ] not = (灰)
+- [ ] forget = 忘れないでください
 - [ ] to = (灰)
 - [ ] turn off〔短语〕 = 消す
 - [ ] the = (灰)
@@ -1226,15 +1224,14 @@
 - [ ] apple = りんご
 
 ## 100. 明日は早いので、そろそろ失礼します。
-> I have to leave soon because I have to get up early tomorrow.
+> Since I have to get up early tomorrow, I will take my leave soon.
 
-- [ ] I = (灰)
-- [ ] have to〔短语〕 = (灰)
-- [ ] leave = 失礼します
-- [ ] soon = そろそろ
-- [ ] because = (灰)
+- [ ] Since = ので
 - [ ] I = (灰)
 - [ ] have to〔短语〕 = (灰)
 - [ ] get up early〔短语〕 = 早い
-- [ ] tomorrow = 明日
+- [ ] I = (灰)
+- [ ] will = (灰)
+- [ ] take my leave〔短语〕 = 失礼します
+- [ ] soon = そろそろ
 
