@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v19";
+const SERVER_BUILD = "v20";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -943,7 +943,14 @@ app.post("/translate", async (req, res) => {
               for (const x of win) {
                 if (x.sourceSpan) zone = zone.split("▯".repeat(x.sourceSpan.length)).join(x.sourceSpan);
               }
-              const hit = cands.find(c => c.length >= 2 && zone.includes(c));
+              let hit = cands.find(c => c.length >= 2 && zone.includes(c));
+              // 中文回退:3 词以上短语允许词典译词去尾(睡觉→睡),前缀须在区域内唯一
+              if (!hit && isZhSrc2 && n >= 3) {
+                for (const c of cands) {
+                  const p = c.slice(0, -1);
+                  if (p.length >= 1 && zone.split(p).length === 2) { hit = p; break; }
+                }
+              }
               if (!hit) continue;
               parsed.words.splice(i, n, {
                 english: phrase,
@@ -1084,6 +1091,58 @@ app.post("/translate", async (req, res) => {
           });
           fixCount++;
         }
+      }
+
+      // F9 邻居吸收(用户标注归纳的三类,全部确定性):
+      //   a) 动词(带span) + 灰小品词/it     → "wiped out"=疲れた、"get it"=知道了
+      //   b) 灰动词 [+灰it] + 小品词(带span) → "make it on"=上去
+      //   c) 日语:灰助动词 + 屈折谓语(带span) → "was happy"=嬉しかった、"got dumped"=フラれた
+      //      (黏着语谓语不可按英文词边界切,かった≠was —— 谓语整块是唯一不误导的方案)
+      {
+        const PART = new Set(["up","out","off","down","away","over","back","along","around","on","in","through"]);
+        const AUX = new Set(["was","were","is","are","am","been","got","gets","has","have","had"]);
+        const isJaSrc3 = /japanese/i.test(String(sourceLanguage));
+        const grayW = x => x && !x.sourceSpan;
+        const engOf = x => (x && x.english || "").trim().toLowerCase();
+        const singleW = x => x && !/\s/.test((x.english || "").trim()) && /^[a-z']+$/i.test((x.english || "").trim());
+        const outArr = [];
+        const ws = parsed.words;
+        let i = 0;
+        while (i < ws.length) {
+          const w = ws[i], n1 = ws[i + 1], n2 = ws[i + 2];
+          // (a)
+          if (w && w.sourceSpan && singleW(w) && w.partOfSpeech === "verb" &&
+              singleW(n1) && grayW(n1) && (PART.has(engOf(n1)) || engOf(n1) === "it")) {
+            outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: "verb",
+              sourceSpan: w.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+            i += 2; fixCount++; continue;
+          }
+          // (b) 三连:make it on
+          if (w && grayW(w) && singleW(w) && w.partOfSpeech === "verb" &&
+              singleW(n1) && grayW(n1) && engOf(n1) === "it" &&
+              singleW(n2) && n2.sourceSpan && PART.has(engOf(n2))) {
+            outArr.push({ english: [w, n1, n2].map(x => x.english.trim()).join(" "), partOfSpeech: "verb",
+              sourceSpan: n2.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+            i += 3; fixCount++; continue;
+          }
+          // (b) 两连:灰动词 + 小品词带span
+          if (w && grayW(w) && singleW(w) && w.partOfSpeech === "verb" &&
+              singleW(n1) && n1.sourceSpan && PART.has(engOf(n1))) {
+            outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: "verb",
+              sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+            i += 2; fixCount++; continue;
+          }
+          // (c) 日语谓语整块
+          if (isJaSrc3 && w && grayW(w) && singleW(w) && AUX.has(engOf(w)) &&
+              n1 && n1.sourceSpan && n1.sourceSpan.length >= 3 && singleW(n1) &&
+              ["verb", "adjective"].includes(n1.partOfSpeech)) {
+            outArr.push({ english: `${w.english.trim()} ${n1.english.trim()}`, partOfSpeech: n1.partOfSpeech,
+              sourceSpan: n1.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+            i += 2; fixCount++; continue;
+          }
+          outArr.push(w); i++;
+        }
+        parsed.words = outArr;
       }
 
       // 比较结构兜底:模型习惯把比较助词留空(より/보다/比),但 than 的对应是学习者
