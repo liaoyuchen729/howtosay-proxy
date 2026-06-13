@@ -203,7 +203,18 @@ for (const [lang, srcText, golds] of GOLD) {
       signal: AbortSignal.timeout(70000)});
     r = await resp.json();
   } catch(e) { console.log("✗ 请求失败:", srcText.slice(0,12), String(e).slice(0,60)); continue; }
-  if (!r.words) { console.log("✗ 无words:", srcText.slice(0,12), JSON.stringify(r).slice(0,80)); continue; }
+  if (!r.words) {
+    // 限流等错误:等 3 秒重试一次,仍失败才跳过(不计入分母,避免污染)
+    await new Promise(res => setTimeout(res, 3000));
+    try {
+      const resp2 = await fetch(B, { method:"POST",
+        headers:{"Content-Type":"application/json", ...(APP_KEY?{"X-App-Key":APP_KEY}:{})},
+        body: JSON.stringify({sourceText:srcText, style:"standard", sourceLanguage:lang, ...(model?{debugModel:model}:{})}),
+        signal: AbortSignal.timeout(70000)});
+      r = await resp2.json();
+    } catch {}
+    if (!r.words) { console.log("⊘ 跳过(限流):", srcText.slice(0,12)); continue; }
+  }
   for (const g of golds) {
     const w = r.words.find(x => g.keys.includes(String(x.english).trim().toLowerCase()));
     if (!w) { skipped++; continue; }   // 译文没用这个词,不计分
@@ -211,6 +222,7 @@ for (const [lang, srcText, golds] of GOLD) {
     if (g.spans.includes(sp)) correct++;
     else { wrong++; wrongList.push(`[${srcText.slice(0,10)}…] ${w.english}=「${sp}」 期望:${JSON.stringify(g.spans)}`); }
   }
+  await new Promise(r => setTimeout(r, 1200));  // 节流:金标集变大后防限流污染
 }
 }
 const total = correct + wrong;
