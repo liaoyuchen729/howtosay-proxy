@@ -24,8 +24,8 @@
 - [ ] got wasted〔短语〕 = 喝多了
 - [ ] last night〔短语〕 = 昨晚
 - [ ] and = (灰)
-- [ ] can't = (灰)
-- [ ] get up〔短语〕 = 起不来
+- [x] can't = 不来
+- [x] get up〔短语〕 = 起
 - [ ] today = 今天
 
 ## 3. 我把刚买的杯子摔碎了。
@@ -37,8 +37,8 @@
 - [ ] cup = 杯子
 - [ ] that = (灰)
 - [ ] I = (灰)
-- [ ] just = (灰)
-- [ ] bought = 买的
+- [x] just = 刚
+- [x] bought = 买
 
 ## 4. 这篇文章我看了三遍才看懂。
 > I read this article three times before I understood it.
@@ -49,7 +49,7 @@
 - [ ] article = 文章
 - [ ] three = 三
 - [ ] times = 遍
-- [ ] before = 才
+- [x] before =
 - [ ] I = (灰)
 - [ ] understood it〔短语〕 = 看懂
 
@@ -63,18 +63,18 @@
 - [ ] just = (灰)
 - [ ] hear = 听
 - [ ] me = (灰)
-- [ ] out = 把话说完
+- [x] out = 说完
 
 ## 6. 他从书包里拿出来一本旧字典。
 > He took an old dictionary out of his backpack.
 
 - [ ] He = (灰)
-- [ ] took = 拿出来
+- [x] took = 拿
 - [ ] an = (灰)
 - [ ] old = 旧
 - [ ] dictionary = 字典
 - [ ] out = 出来
-- [ ] of = 里
+- [x] of = (灰)
 - [ ] his = (灰)
 - [ ] backpack = 书包
 
@@ -86,11 +86,11 @@
 - [ ] hot = 热
 - [ ] I = (灰)
 - [ ] don't = 没有
-- [ ] feel = 有
-- [ ] like = 得
+- [x] feel = 
+- [x] like = 
 - [ ] eating = 胃口
-- [ ] at = (灰)
-- [ ] all = 一点
+- [x] at = (灰)
+- [x] all = 一点
 
 ## 8. 你难道不觉得这件事有点奇怪吗?
 > Do you not find this matter a little strange?
@@ -99,8 +99,8 @@
 - [ ] you = (灰)
 - [ ] not = 不
 - [ ] find = 觉得
-- [ ] this = 这
-- [ ] matter = 件事
+- [x] this = 这件
+- [x] matter = 事
 - [ ] a little〔短语〕 = 有点
 - [ ] strange = 奇怪
 
@@ -123,16 +123,16 @@
 > Young people nowadays just don't wanna compete hard, they just wanna chill and do nothing.
 
 - [ ] Young people〔短语〕 = 年轻人
-- [ ] nowadays = 现在
+- [x] nowadays = 现在的
 - [ ] just = (灰)
 - [ ] don't = 不
 - [ ] wanna = 想
 - [ ] compete hard〔短语〕 = 内卷
 - [ ] they = (灰)
-- [ ] just = (灰)
+- [x] just = 只
 - [ ] wanna = 想
-- [ ] chill = 躺平
-- [ ] and = 只
+- [x] chill =
+- [ ] and =
 - [ ] do = (灰)
 - [ ] nothing = (灰)
 
@@ -143,10 +143,10 @@
 - [ ] rained = 下了
 - [ ] heavily = 大雨
 - [ ] yesterday = 昨天
-- [ ] so = 只好
+- [x] so = 
 - [ ] we = (灰)
-- [ ] had = (灰)
-- [ ] to = (灰)
+- [x] had = (灰)
+- [x] to = (灰)
 - [ ] cancel = 取消了
 - [ ] the = (灰)
 - [ ] match = 比赛
@@ -158,8 +158,8 @@
 - [ ] told = 告诉
 - [ ] me = (灰)
 - [ ] this = 这件事
-- [ ] in = (灰)
-- [ ] person = 亲口
+- [x] in = (灰)
+- [x] person = 亲口
 
 ## 13. 咱们边吃边聊吧,菜都要凉了。
 > Let's eat and chat at the same time, the food's gonna get cold.
@@ -168,10 +168,10 @@
 - [ ] eat = 吃
 - [ ] and = (灰)
 - [ ] chat = 聊
-- [ ] at = (灰)
-- [ ] the = (灰)
-- [ ] same = 边
-- [ ] time = 边
+- [x] at = (灰)
+- [x] the = (灰)
+- [x] same = 边
+- [x] time = 边
 - [ ] the = (灰)
 - [ ] food = 菜
 - [ ] 's = (灰)
@@ -221,12 +221,12 @@
 > I'm telling you, don't take this to heart.
 
 - [ ] I'm = (灰)
-- [ ] telling = 跟
+- [x] telling = 说
 - [ ] you = (灰)
 - [ ] don't = 别
-- [ ] take = 往
+- [x] take = (灰)
 - [ ] this = 这事儿
-- [ ] to heart〔短语〕 = 心里去
+- [x] to heart〔短语〕 = 往心里去
 
 ## 18. 他被同事们推选为新一任的部门主管。
 > He was elected by his colleagues as the new department manager.
@@ -248,7 +248,7 @@
 
 - [ ] The = (灰)
 - [ ] teacher = 老师
-- [ ] asked = (灰)
+- [x] asked = 让
 - [ ] each = 每个
 - [ ] student = 学生
 - [ ] to = (灰)
@@ -264,9 +264,9 @@
 - [ ] just = (灰)
 - [ ] asking = 问
 - [ ] on purpose〔短语〕 = 故
-- [ ] even though〔短语〕 = 明知
+- [x] even though〔短语〕 = 
 - [ ] you = (灰)
-- [ ] know = (灰)
+- [x] know = 知
 - [ ] the = (灰)
 - [ ] answer = (灰)
 
@@ -277,11 +277,11 @@
 - [ ] took = 洗了
 - [ ] a = (灰)
 - [ ] shower = 澡
-- [ ] and = 就
+- [x] and = 
 - [ ] then = (灰)
-- [ ] went = 睡了
+- [x] went = 
 - [ ] to = (灰)
-- [ ] sleep = (灰)
+- [x] sleep = 睡
 - [ ] I = (灰)
 - [ ] did = (灰)
 - [ ] not = 没
@@ -297,7 +297,7 @@
 - [ ] beats around the bush〔语法〕 = 绕来绕去
 - [ ] and = (灰)
 - [ ] never = 从来不
-- [ ] gets = 说
+- [x] gets = (灰)
 - [ ] straight to the point〔短语〕 = 直说
 
 ## 23. 只有坚持到最后的人,才能尝到成功的滋味。
@@ -305,12 +305,12 @@
 
 - [ ] Only = 只有
 - [ ] those = (灰)
-- [ ] who = (灰)
+- [ ] who = 
 - [ ] persist = 坚持
 - [ ] until = 到
 - [ ] the = (灰)
 - [ ] end = 最后
-- [ ] can = (灰)
+- [x] can = 能
 - [ ] taste = 尝到
 - [ ] the = (灰)
 - [ ] flavor = 滋味
@@ -327,7 +327,7 @@
 - [ ] it = (灰)
 - [ ] is = (灰)
 - [ ] not = 没
-- [ ] that = (灰)
+- [x] that = 那么
 - [ ] easy = 容易
 - [ ] to = (灰)
 - [ ] solve = 做
@@ -354,9 +354,9 @@
 - [ ] atmosphere = 气氛
 - [ ] was = (灰)
 - [ ] off = 不对劲
-- [ ] as soon as〔短语〕 = 一进门就
+- [x] as soon as〔短语〕 = 一
 - [ ] he = (灰)
-- [ ] entered = (灰)
+- [x] entered = 进
 - [ ] the = (灰)
 - [ ] door = 门
 
@@ -364,18 +364,18 @@
 > Don't even mention it, I just got my phone fixed and already dropped it again.
 
 - [ ] Don't = 别
-- [ ] even = 提
-- [ ] mention it〔短语〕 = (灰)
+- [x] even = (灰)
+- [x] mention it〔短语〕 = 提
 - [ ] I = (灰)
-- [ ] just = (灰)
+- [x] just = 刚
 - [ ] got = (灰)
 - [ ] my = (灰)
 - [ ] phone = 手机
 - [ ] fixed = 修好
 - [ ] and = (灰)
-- [ ] already = 又
+- [x] already = (灰)
 - [ ] dropped it〔短语〕 = 摔了
-- [ ] again = (灰)
+- [x] again = 又
 
 ## 28. 与会者就这个方案展开了激烈的讨论。
 > The participants engaged in a heated discussion about this plan.
@@ -383,28 +383,28 @@
 - [ ] The = (灰)
 - [ ] participants = 与会者
 - [ ] engaged = 展开了
-- [ ] in = 就
+- [x] in = (灰)
 - [ ] a = (灰)
 - [ ] heated = 激烈的
 - [ ] discussion = 讨论
-- [ ] about this〔短语〕 = 这个
+- [x] about this〔短语〕 = 就这个
 - [ ] plan = 方案
 
 ## 29. 再忙也要按时吃饭,身体要紧。
 > No matter how busy you are, you must eat on time because your health is important.
 
-- [ ] No matter how busy〔短语〕 = 再忙也
+- [x] No matter how busy〔短语〕 = 再忙
 - [ ] you = (灰)
 - [ ] are = (灰)
 - [ ] you = (灰)
 - [ ] must = 要
 - [ ] eat = 吃饭
 - [ ] on time〔短语〕 = 按时
-- [ ] because = 要
+- [x] because = (灰)
 - [ ] your = (灰)
 - [ ] health = 身体
 - [ ] is = (灰)
-- [ ] important = 紧
+- [x] important = 要紧
 
 ## 30. 这部电影口碑两极分化,有人吹爆有人踩。
 > This movie's got people either loving it or hating it.
@@ -412,8 +412,8 @@
 - [ ] This = 这部
 - [ ] movie = 电影
 - [ ] 's = (灰)
-- [ ] got = (灰)
-- [ ] people = 有人
+- [x] got = 有
+- [x] people = 人
 - [ ] either = 两极
 - [ ] loving it〔短语〕 = 吹爆
 - [ ] or = (灰)
@@ -423,8 +423,8 @@
 > He shifted all the responsibility onto others.
 
 - [ ] He = (灰)
-- [ ] shifted = 推到了
-- [ ] all = 全都
+- [x] shifted = 推
+- [x] all = 全
 - [ ] the = (灰)
 - [ ] responsibility = 责任
 - [ ] onto = 到
@@ -441,16 +441,16 @@
 - [ ] entire = 整个
 - [ ] company = 公司
 - [ ] was = (灰)
-- [ ] in = (灰)
-- [ ] an = (灰)
-- [ ] uproar = 炸了锅
+- [x] in = (灰)
+- [x] an = (灰)
+- [x] uproar = 炸了锅
 
 ## 33. 大过年的,你就别给大家添堵了。
 > It's the New Year, so don't be a downer for everyone.
 
 - [ ] It's = (灰)
 - [ ] the = (灰)
-- [ ] New Year〔短语〕 = 大过年的
+- [x] New Year〔短语〕 = 大过年
 - [ ] so = (灰)
 - [ ] don't = 别
 - [ ] be = (灰)
@@ -466,9 +466,9 @@
 - [ ] there = (灰)
 - [ ] is = (灰)
 - [ ] only = 只有
-- [ ] a = (灰)
-- [ ] glimmer = 一线
-- [ ] of = (灰)
+- [x] a = (灰)
+- [x] glimmer = 一线
+- [x] of = (灰)
 - [ ] hope = 希望
 - [ ] we = (灰)
 - [ ] must not〔短语〕 = 不能
@@ -492,11 +492,11 @@
 - [ ] says = 说
 - [ ] he = (灰)
 - [ ] doesn't want it〔短语〕 = 不要
-- [ ] but = 倒是
+- [x] but = 倒
 - [ ] his = (灰)
 - [ ] body = 身体
 - [ ] 's = (灰)
-- [ ] telling = 很诚实
+- [x] telling = (灰)
 - [ ] a = (灰)
 - [ ] different = (灰)
 - [ ] story = (灰)
@@ -524,12 +524,12 @@
 
 - [ ] You = (灰)
 - [ ] had better〔短语〕 = 最好
-- [ ] make a backup copy〔短语〕 = 备份一份
+- [x] make a backup copy〔短语〕 = 备份
 - [ ] of = (灰)
 - [ ] the = (灰)
 - [ ] important = 重要
 - [ ] documents = 文件
-- [ ] just in case〔语法〕 = 万一
+- [x] just in case〔语法〕 = 以防万一
 
 ## 39. 我点的外卖到现在还没送到,都两个小时了。
 > My takeout still hasn't shown up, and it's been two hours already.
@@ -541,7 +541,7 @@
 - [ ] shown up〔短语〕 = 送到
 - [ ] and = (灰)
 - [ ] it's = (灰)
-- [ ] been = (灰)
+- [ ] been = 
 - [ ] two = 两个
 - [ ] hours = 小时
 - [ ] already = (灰)
@@ -589,23 +589,23 @@
 
 - [ ] The = (灰)
 - [ ] team = 球队
-- [ ] came = 逆转
-- [ ] from = (灰)
-- [ ] behind = (灰)
+- [x] came = 逆转
+- [x] from = (灰)
+- [x] behind = (灰)
 - [ ] to = (灰)
 - [ ] win = 取胜
 - [ ] after = (灰)
 - [ ] being = (灰)
 - [ ] two = 两
 - [ ] goals = 球
-- [ ] down = (灰)
+- [x] down = 落后
 
 ## 44. 你少来这套,我又不是第一天认识你。
 > Cut the crap, I'm not new to you.
 
-- [ ] Cut = 你少来
-- [ ] the = (灰)
-- [ ] crap = 这套
+- [x] Cut = 你少来
+- [x] the = (灰)
+- [x] crap = 这套
 - [ ] I = (灰)
 - [ ] 'm = (灰)
 - [ ] not = 又不是
@@ -623,10 +623,10 @@
 - [ ] on = 上
 - [ ] the = (灰)
 - [ ] playground = 操场
-- [ ] having = 玩得
+- [x] having = 
 - [ ] a = (灰)
 - [ ] great time〔短语〕 = 不亦乐乎
-- [ ] playing = (灰)
+- [x] playing = 玩
 
 ## 46. 这项政策对小微企业来说无疑是雪中送炭。
 > This policy is undoubtedly a timely help for small and micro enterprises.
@@ -638,18 +638,18 @@
 - [ ] a = (灰)
 - [ ] timely help〔短语〕 = 雪中送炭
 - [ ] for = 对
-- [ ] small = (灰)
+- [x] small = 小
 - [ ] and = (灰)
-- [ ] micro enterprises〔短语〕 = 小微企业
+- [x] micro enterprises〔短语〕 = 微企业
 
 ## 47. 熬夜一时爽,第二天上班就遭罪了。
 > Staying up late feels great for a bit, but the next day at work totally sucks.
 
 - [ ] Staying up late〔短语〕 = 熬夜
-- [ ] feels great〔短语〕 = 一时爽
+- [x] feels great〔短语〕 = 爽
 - [ ] for = (灰)
-- [ ] a = (灰)
-- [ ] bit = (灰)
+- [x] a = (灰)
+- [x] bit = (灰)
 - [ ] but = (灰)
 - [ ] the = (灰)
 - [ ] next day〔短语〕 = 第二天
@@ -749,27 +749,27 @@
 
 - [ ] My = (灰)
 - [ ] mother = 母
-- [ ] made = 作ってくれました
+- [x] made = 作って
 - [ ] a = (灰)
 - [ ] lunch box〔短语〕 = 弁当
-- [ ] for = (灰)
+- [x] for = くれました
 - [ ] me = (灰)
 
 ## 56. 後輩に資料をコピーしてあげた。
 > I copied the documents for my junior colleague.
 
 - [ ] I = (灰)
-- [ ] copied = コピーしてあげた
+- [x] copied = コピーして
 - [ ] the = (灰)
 - [ ] documents = 資料
-- [ ] for = (灰)
+- [x] for = あげた
 - [ ] my = (灰)
 - [ ] junior colleague〔短语〕 = 後輩
 
 ## 57. 子供の頃、母に野菜を食べさせられました。
 > When I was a child, my mother made me eat vegetables.
 
-- [ ] When = 子供の頃
+- [x] When = 
 - [ ] I = (灰)
 - [ ] was = (灰)
 - [ ] a = (灰)
@@ -797,22 +797,22 @@
 
 - [ ] I = (灰)
 - [ ] am = (灰)
-- [ ] just = (灰)
+- [x] just = ちょうど
 - [ ] in = (灰)
 - [ ] the = (灰)
 - [ ] middle = ところ
 - [ ] of = (灰)
 - [ ] making = 作っている
 - [ ] dinner = 夕飯
-- [ ] right now〔短语〕 = (灰)
+- [x] right now〔短语〕 = 今
 
 ## 60. 駅に着いたところで、電車が出てしまった。
 > Just as I arrived at the station, the train had already left.
 
-- [ ] Just = (灰)
-- [ ] as = ところで
+- [x] Just = (灰)
+- [x] as = ところ
 - [ ] I = (灰)
-- [ ] arrived at〔短语〕 = いた
+- [x] arrived at〔短语〕 = 着いた
 - [ ] the = (灰)
 - [ ] station = 駅
 - [ ] the = (灰)
@@ -827,16 +827,16 @@
 - [ ] I'm = (灰)
 - [ ] starving = お腹ぺこぺこ
 - [ ] and = (灰)
-- [ ] can't move〔短语〕 = もう動けない
-- [ ] anymore = (灰)
+- [x] can't move〔短语〕 = 動けない
+- [x] anymore = もう
 
 ## 62. 明日テストだから勉強しなきゃ。
 > I gotta study 'cause I have a test tomorrow.
 
 - [ ] I = (灰)
-- [ ] gotta = (灰)
-- [ ] study = 勉強しなきゃ
-- [ ] 'cause = から
+- [x] gotta = しなきゃ
+- [x] study = 勉強
+- [x] 'cause = だから
 - [ ] I = (灰)
 - [ ] have = (灰)
 - [ ] a = (灰)
@@ -858,8 +858,8 @@
 
 - [ ] Sorry = ごめん
 - [ ] I = (灰)
-- [ ] have no〔短语〕 = わかんない
-- [ ] idea = (灰)
+- [x] have no〔短语〕 = わかんない
+- [x] idea = (灰)
 - [ ] what = 何
 - [ ] you = (灰)
 - [ ] 're = (灰)
@@ -873,11 +873,11 @@
 - [ ] reads = 読んで
 - [ ] manga = 漫画
 - [ ] and = (灰)
-- [ ] does = (灰)
-- [ ] not = 全然
-- [ ] study = 勉強しない
-- [ ] at = (灰)
-- [ ] all = (灰)
+- [x] does = (灰)
+- [x] not = 
+- [x] study = 勉強
+- [x] at = (灰)
+- [x] all = (灰)
 
 ## 66. 日本の物価は年々上がりつつある。
 > Prices in Japan are gradually rising year by year.
@@ -940,19 +940,19 @@
 ## 71. 昨日の試合、最後までハラハラしたね。
 > That game yesterday kept me on edge till the very end.
 
-- [ ] That game〔短语〕 = 昨日の試合
-- [ ] yesterday = (灰)
+- [ ] That game〔短语〕 = 試合
+- [x] yesterday = 昨日
 - [ ] kept me on edge〔短语〕 = ハラハラした
-- [ ] till = 最後まで
+- [x] till = まで
 - [ ] the = (灰)
 - [ ] very = (灰)
-- [ ] end = (灰)
+- [x] end = 最後
 
 ## 72. 雷がごろごろ鳴っている。
 > Thunder is rumbling.
 
 - [ ] Thunder = 雷
-- [ ] is rumbling〔短语〕 = 鳴っている
+- [x] is rumbling〔短语〕 = 鳴っている
 
 ## 73. 明日の遠足、今からわくわくする。
 > I'm already excited for tomorrow's field trip.
@@ -970,9 +970,9 @@
 > She did not even apologize for breaking her promise.
 
 - [ ] She = (灰)
-- [ ] did = (灰)
-- [ ] not = も
-- [ ] even = (灰)
+- [x] did = (灰)
+- [x] not = しなかった
+- [x] even = も
 - [ ] apologize = 謝り
 - [ ] for = (灰)
 - [ ] breaking = 破った
@@ -995,8 +995,8 @@
 > You should not speak ill of others.
 
 - [ ] You = (灰)
-- [ ] should = (灰)
-- [ ] not = ません
+- [x] should = (灰)
+- [x] not = ません
 - [ ] speak = 言う
 - [ ] ill = 悪口
 - [ ] of = (灰)
@@ -1016,7 +1016,7 @@
 > I try to run for thirty minutes every morning.
 
 - [ ] I = (灰)
-- [ ] try = しています
+- [ ] try = ようにしています
 - [ ] to run〔短语〕 = 走る
 - [ ] for = (灰)
 - [ ] thirty minutes〔短语〕 = 三十分
@@ -1028,11 +1028,11 @@
 
 - [ ] There = (灰)
 - [ ] is = (灰)
-- [ ] no = ない
-- [ ] way = はず
+- [x] no = ない
+- [x] way = はず
 - [ ] he = (灰)
 - [ ] would = (灰)
-- [ ] lie = 嘘
+- [x] lie = 嘘をつく
 
 ## 80. 財布には千円しか残っていなかった。
 > There was only one thousand yen left in the wallet.
@@ -1042,7 +1042,7 @@
 - [ ] only = しか
 - [ ] one thousand〔短语〕 = 千
 - [ ] yen = 円
-- [ ] left in〔短语〕 = 残っていなかった
+- [x] left in〔短语〕 = 残って
 - [ ] the = (灰)
 - [ ] wallet = 財布
 
@@ -1054,13 +1054,15 @@
 - [ ] been = (灰)
 - [ ] working overtime〔短语〕 = 残業
 - [ ] nonstop = ばかり
-- [ ] lately = 最近
+- [x] lately = 
 - [ ] and = (灰)
-- [ ] can't = (灰)
-- [ ] get = 帰れない
+- [x] can't = ない
+- [ ] get = 帰れ
 - [ ] home = 家
-- [ ] at = (灰)
-- [ ] all = 全然
+- [x] at = (灰)
+- [x] all = 全然
+
+<!-- 82-100 v27 重生成 -->
 
 ## 82. 彼は何も言わずに部屋を飛び出した。
 > He ran out of the room without saying anything.
@@ -1070,20 +1072,21 @@
 - [ ] of = (灰)
 - [ ] the = (灰)
 - [ ] room = 部屋
-- [ ] without saying〔短语〕 = 何も言わずに
-- [ ] anything = (灰)
+- [ ] without = 何も
+- [ ] saying = 言わずに
+- [ ] anything = 何も
 
 ## 83. 試験に落ちて、彼はすっかり落ち込んでいる。
-> He failed the exam and is completely downhearted.
+> He is completely depressed after failing the exam.
 
 - [ ] He = (灰)
-- [ ] failed = 落ちて
-- [ ] the = (灰)
-- [ ] exam = 試験
-- [ ] and = (灰)
 - [ ] is = (灰)
 - [ ] completely = すっかり
-- [ ] downhearted = 落ち込んでいる
+- [ ] depressed = 落ち込んでいる
+- [ ] after = (灰)
+- [ ] failing = 落ちて
+- [ ] the = (灰)
+- [ ] exam = 試験
 
 ## 84. 大事なサインを見逃してしまった。
 > I missed an important sign.
@@ -1104,13 +1107,13 @@
 - [ ] packed = 混んでる
 - [ ] whenever = (灰)
 - [ ] I = (灰)
-- [ ] go = 行っても
+- [ ] go = 行って
 
 ## 86. ご迷惑をおかけして申し訳ございません。
-> I am sorry for causing you trouble.
+> I apologize for causing you trouble.
 
 - [ ] I = (灰)
-- [ ] am sorry〔短语〕 = 申し訳ございません
+- [ ] apologize = 申し訳ございません
 - [ ] for = (灰)
 - [ ] causing = おかけして
 - [ ] you = (灰)
@@ -1124,7 +1127,7 @@
 - [ ] a = (灰)
 - [ ] thank-you = お礼
 - [ ] letter = 手紙
-- [ ] to = に
+- [ ] to = (灰)
 - [ ] the = (灰)
 - [ ] teacher = 先生
 - [ ] who = (灰)
@@ -1133,7 +1136,7 @@
 - [ ] me = (灰)
 
 ## 88. 今日は仕事が早く終わったから、飲みに行かない?
-> I finished work early today, so wanna go grab a drink?
+> I finished work early today, so wanna go grab some drinks?
 
 - [ ] I = (灰)
 - [ ] finished = 終わった
@@ -1144,19 +1147,21 @@
 - [ ] wanna = (灰)
 - [ ] go = (灰)
 - [ ] grab = (灰)
-- [ ] a = (灰)
-- [ ] drink = 飲みに行かない?
+- [ ] some = (灰)
+- [ ] drinks = 飲みに行かない?
 
 ## 89. 彼女は歌手としてだけでなく、女優としても活躍している。
 > She is active not only as a singer but also as an actress.
 
 - [ ] She = (灰)
 - [ ] is active〔短语〕 = 活躍している
-- [ ] not only〔语法〕 = だけでなく
+- [ ] not = (灰)
+- [ ] only = (灰)
 - [ ] as = として
 - [ ] a = (灰)
 - [ ] singer = 歌手
-- [ ] but also〔短语〕 = も
+- [ ] but = だけでなく
+- [ ] also = も
 - [ ] as = として
 - [ ] an = (灰)
 - [ ] actress = 女優
@@ -1173,12 +1178,12 @@
 - [ ] was broken〔短语〕 = 割れている
 
 ## 91. この服、ちょっと派手すぎるかなあ。
-> This outfit's a bit too flashy, huh?
+> This outfit's kinda too flashy, huh?
 
 - [ ] This = この
 - [ ] outfit = 服
 - [ ] 's = (灰)
-- [ ] a bit〔短语〕 = ちょっと
+- [ ] kinda = ちょっと
 - [ ] too = すぎる
 - [ ] flashy = 派手
 - [ ] huh = (灰)
@@ -1196,48 +1201,52 @@
 - [ ] departure = 出発
 
 ## 93. 彼の話を聞いているうちに、眠くなってきた。
-> I became sleepy while listening to his story.
+> While listening to his story, I started to feel sleepy.
 
-- [ ] I = (灰)
-- [ ] became = なってきた
-- [ ] sleepy = 眠く
-- [ ] while = うちに
+- [ ] While = うちに
 - [ ] listening = 聞いている
 - [ ] to = (灰)
 - [ ] his = (灰)
 - [ ] story = 話
+- [ ] I = (灰)
+- [ ] started = なってきた
+- [ ] to = (灰)
+- [ ] feel = (灰)
+- [ ] sleepy = 眠く
 
 ## 94. 風邪気味なので、今日は早めに休みます。
-> I am feeling a little under the weather, so I will rest early today.
+> I will go to bed early today because I am feeling a little sick.
 
-- [ ] I = (灰)
-- [ ] am = (灰)
-- [ ] feeling a little〔短语〕 = 気味
-- [ ] under = (灰)
-- [ ] the = (灰)
-- [ ] weather = 風邪
-- [ ] so = ので
 - [ ] I = (灰)
 - [ ] will = (灰)
-- [ ] rest = 休み
+- [ ] go = 休みます
+- [ ] to = (灰)
+- [ ] bed = (灰)
 - [ ] early = 早
 - [ ] today = 今日は
+- [ ] because = (灰)
+- [ ] I = (灰)
+- [ ] am = (灰)
+- [ ] feeling = 気味
+- [ ] a = (灰)
+- [ ] little sick〔短语〕 = 風邪
 
 ## 95. え、マジで?それはやばいって。
-> Wait, seriously? That's messed up.
+> Wait, seriously? That's crazy.
 
 - [ ] Wait = え
 - [ ] seriously = マジで
 - [ ] That = それ
 - [ ] 's = (灰)
-- [ ] messed up〔短语〕 = やばい
+- [ ] crazy = やばい
 
 ## 96. 赤ちゃんがすやすや眠っている。
 > The baby is sleeping soundly.
 
 - [ ] The = (灰)
 - [ ] baby = 赤ちゃん
-- [ ] is sleeping〔短语〕 = 眠っている
+- [ ] is = (灰)
+- [ ] sleeping = 眠っている
 - [ ] soundly = すやすや
 
 ## 97. 彼は怒るどころか、笑って許してくれた。
@@ -1265,7 +1274,7 @@
 - [ ] left = 忘れてきた
 - [ ] my = (灰)
 - [ ] phone = 携帯
-- [ ] at = に
+- [ ] at = (灰)
 - [ ] home = 家
 
 ## 99. そんなに焦らなくても、まだ時間あるじゃん。
@@ -1275,18 +1284,18 @@
 - [ ] don't = なくても
 - [ ] gotta rush〔短语〕 = 焦らなくても
 - [ ] so much〔短语〕 = そんなに
-- [ ] there's = あるじゃん
+- [ ] there's = (灰)
 - [ ] still = まだ
 - [ ] time = 時間
 
 ## 100. 新しい橋の建設が進められている。
-> The construction of the new bridge is progressing.
+> The construction of a new bridge is underway.
 
 - [ ] The = (灰)
 - [ ] construction = 建設
 - [ ] of = (灰)
-- [ ] the = (灰)
+- [ ] a = (灰)
 - [ ] new = 新しい
 - [ ] bridge = 橋
-- [ ] is progressing〔短语〕 = 進められている
+- [ ] is underway〔短语〕 = 進められている
 
