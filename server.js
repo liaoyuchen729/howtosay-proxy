@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v27";
+const SERVER_BUILD = "v28";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1281,16 +1281,21 @@ app.post("/translate", async (req, res) => {
         }
       }
 
-      // be + V-ing 守卫(用户金标 #72:is rumbling 不是词组):
-      // 进行时是语法不是词汇短语 → 拆开:be 置灰,V-ing 保留 span
+      // be 系动词守卫(用户金标 #72 is rumbling / is active / is underway):
+      // "be + 单个表语(V-ing/形容词/过去分词/副词)" 是系动词结构,不是词汇短语 →
+      // 拆开:be 置灰,表语保留 span。只拆"be + 恰好一个词",真习语(be 在中间)不受影响。
       for (let k = 0; k < parsed.words.length; k++) {
         const w = parsed.words[k];
         if (!w || typeof w.english !== "string") continue;
-        const m = w.english.trim().match(/^(am|is|are|was|were|be|been|being)\s+([A-Za-z]+ing)$/i);
+        const m = w.english.trim().match(/^(am|is|are|was|were|be|been|being)\s+([A-Za-z]+)$/i);
         if (!m) continue;
+        const comp = m[2].toLowerCase();
+        // 介词跟着的不算系动词表语(is in / was at 让模型自己处理),其余单补语一律拆
+        if (["in","on","at","to","of","for","with","by","from"].includes(comp)) continue;
+        const pos = /ing$/.test(comp) ? "verb" : (/ed$|en$/.test(comp) ? "verb" : "adjective");
         parsed.words.splice(k, 1,
           { english: m[1], partOfSpeech: "auxiliary", sourceSpan: "", definition: "", isGrammarStructure: false, examples: [] },
-          { english: m[2], partOfSpeech: "verb", sourceSpan: w.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+          { english: m[2], partOfSpeech: pos, sourceSpan: w.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
         k++; fixCount++;
       }
 
