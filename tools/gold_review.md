@@ -932,20 +932,20 @@
 
 - [ ] Have = (灰)
 - [ ] you = (灰)
-- [ ] ever = こと
-- [ ] been = (灰)
-- [ ] to = (灰)
+- [x] ever = 
+- [x] been = 行った
+- [x] to = (灰)
 - [ ] Japan = 日本
 
 ## 75. 窓を開けたまま寝てしまいました。
 > I fell asleep with the window open.
 
 - [ ] I = (灰)
-- [ ] fell asleep〔短语〕 = 寝てしまいました
+- [x] fell asleep〔短语〕 = 寝て
 - [ ] with = (灰)
 - [ ] the = (灰)
 - [ ] window = 窓
-- [ ] open = 開けたまま
+- [x] open = 開けた
 
 ## 76. 頑張れば頑張るほど上手になります。
 > The more you try hard, the better you become.
@@ -966,20 +966,20 @@
 - [ ] go home〔短语〕 = 帰りましょう
 - [ ] before = うちに
 - [ ] it = (灰)
-- [ ] starts raining〔短语〕 = 降らない
+- [x] starts raining〔短语〕 = 雨が降らない
 
 ## 78. 彼は来ないかもしれません。
 > He might not come.
 
 - [ ] He = (灰)
 - [ ] might = かもしれません
-- [ ] not = (灰)
-- [ ] come = 来ない
+- [x] not = ない
+- [ ] come = 来
 
 ## 79. この漢字の読み方を教えてください。
 > Please tell me how to read this kanji.
 
-- [ ] Please = (灰)
+- [x] Please = ください
 - [ ] tell = 教えて
 - [ ] me = (灰)
 - [ ] how to read〔短语〕 = 読み方
@@ -991,17 +991,17 @@
 
 - [ ] The = (灰)
 - [ ] meeting = 会議
-- [ ] is scheduled〔短语〕 = ことになっています
+- [x] is scheduled〔短语〕
 - [ ] to start〔短语〕 = 始まる
 - [ ] at = (灰)
 - [ ] three = 三
-- [ ] o'clock = 三時
+- [x] o'clock = 時
 
 ## 81. 駅の近くに新しいカフェができました。
 > A new cafe has opened near the station.
 
 - [ ] A = (灰)
-- [ ] new = 新
+- [x] new = 新しい
 - [ ] cafe = カフェ
 - [ ] has opened〔短语〕 = できました
 - [ ] near = 近くに
@@ -1012,10 +1012,10 @@
 > I talked on the phone with my friend for two hours last night.
 
 - [ ] I = (灰)
-- [ ] talked on〔短语〕 = 話しました
-- [ ] the = (灰)
-- [ ] phone = 電話
-- [ ] with = (灰)
+- [x] talked = 話しました
+- [x] on the = (灰)
+- [x] phone = 電話
+- [x] with = と
 - [ ] my = (灰)
 - [ ] friend = 友達
 - [ ] for = (灰)
@@ -1030,7 +1030,7 @@
 - [ ] take = 飲んで
 - [ ] this = この
 - [ ] medicine = 薬
-- [ ] after = 後に
+- [x] after = 後
 - [ ] meals = 食
 
 ## 84. 来月から家賃が上がるそうです。
@@ -1051,9 +1051,9 @@
 
 - [ ] I = (灰)
 - [ ] took = 撮りました
-- [ ] a = (灰)
-- [ ] lot = たくさん
-- [ ] of = (灰)
+- [x] a = (灰)
+- [x] lot = たくさん
+- [x] of = (灰)
 - [ ] pictures = 写真
 - [ ] during = (灰)
 - [ ] the = (灰)
@@ -1070,7 +1070,8 @@
 - [ ] but = (灰)
 - [ ] the = (灰)
 - [ ] snowy scenery〔短语〕 = 雪景
-- [ ] is beautiful〔短语〕 = きれい
+- [x] is 
+- [x] beautiful = きれい
 
 ## 87. 彼女は英語も中国語も話せます。
 > She can speak both English and Chinese.
@@ -1088,13 +1089,13 @@
 
 - [ ] There = (灰)
 - [ ] are = (灰)
-- [ ] too = すぎて
+- [x] too = すぎ
 - [ ] many = 多
 - [ ] bags = 荷物
 - [ ] for = (灰)
 - [ ] me = (灰)
 - [ ] to = (灰)
-- [ ] carry = 運べません
+- [x] carry = 運べ
 - [ ] alone = 一人で
 
 ## 89. もう少し安くなりませんか?
@@ -1120,21 +1121,21 @@
 ## 91. 今度の日曜、暇だったら遊びに来てよ。
 > If you're free this Sunday, come hang out.
 
-- [ ] If = たら
+- [x] If = だったら
 - [ ] you = (灰)
 - [ ] 're = (灰)
 - [ ] free = 暇
 - [ ] this = 今度の
 - [ ] Sunday = 日曜
 - [ ] come = 来て
-- [ ] hang out〔语法〕 = 遊びに
+- [x] hang out〔语法〕 = 遊び
 
 ## 92. あの映画、泣けるって聞いたけど本当?
 > I heard that movie's a tearjerker, is that true?
 
 - [ ] I = (灰)
 - [ ] heard = 聞いた
-- [ ] that = (灰)
+- [x] that = あの
 - [ ] movie = 映画
 - [ ] 's = (灰)
 - [ ] a = (灰)
@@ -1152,7 +1153,7 @@
 - [ ] I'm = (灰)
 - [ ] on = (灰)
 - [ ] a = (灰)
-- [ ] diet = ダイエット中
+- [x] diet = ダイエット
 
 ## 94. スマホの調子が悪くて困ってる。
 > My phone's acting up and it's driving me nuts.
@@ -1163,18 +1164,18 @@
 - [ ] acting up〔短语〕 = 調子が悪くて
 - [ ] and = (灰)
 - [ ] it's = (灰)
-- [ ] driving = 困ってる
-- [ ] me = (灰)
-- [ ] nuts = (灰)
+- [x] driving = 困ってる
+- [x] me = (灰)
+- [x] nuts = (灰)
 
 ## 95. 駅まで送ってくれてありがとう。
 > Thanks for dropping me off at the station.
 
 - [ ] Thanks = ありがとう
 - [ ] for = (灰)
-- [ ] dropping = 送って
-- [ ] me = (灰)
-- [ ] off = (灰)
+- [x] dropping = 送って
+- [x] me = (灰)
+- [x] off = (灰)
 - [ ] at = まで
 - [ ] the = (灰)
 - [ ] station = 駅
@@ -1182,10 +1183,10 @@
 ## 96. 電気を消すのを忘れないでください。
 > Please do not forget to turn off the light.
 
-- [ ] Please = (灰)
+- [x] Please = ください
 - [ ] do = (灰)
 - [ ] not = (灰)
-- [ ] forget = 忘れないでください
+- [x] forget = 忘れ
 - [ ] to = (灰)
 - [ ] turn off〔短语〕 = 消す
 - [ ] the = (灰)
@@ -1209,9 +1210,9 @@
 - [ ] for the first time〔短语〕 = 初めて
 - [ ] and = (灰)
 - [ ] it = (灰)
-- [ ] was = (灰)
+- [x] was = かった
 - [ ] surprisingly = 意外と
-- [ ] difficult = 難しかった
+- [x] difficult = 難し
 
 ## 99. 近所の人がりんごをくれました。
 > A neighbor gave me an apple.
