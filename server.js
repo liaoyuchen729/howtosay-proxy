@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v26";
+const SERVER_BUILD = "v27";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1279,6 +1279,19 @@ app.post("/translate", async (req, res) => {
           const m = src.match(/就要|将要|將要|将|將/);
           if (m) { wWill.sourceSpan = m[0]; fixCount++; }
         }
+      }
+
+      // be + V-ing 守卫(用户金标 #72:is rumbling 不是词组):
+      // 进行时是语法不是词汇短语 → 拆开:be 置灰,V-ing 保留 span
+      for (let k = 0; k < parsed.words.length; k++) {
+        const w = parsed.words[k];
+        if (!w || typeof w.english !== "string") continue;
+        const m = w.english.trim().match(/^(am|is|are|was|were|be|been|being)\s+([A-Za-z]+ing)$/i);
+        if (!m) continue;
+        parsed.words.splice(k, 1,
+          { english: m[1], partOfSpeech: "auxiliary", sourceSpan: "", definition: "", isGrammarStructure: false, examples: [] },
+          { english: m[2], partOfSpeech: "verb", sourceSpan: w.sourceSpan, definition: "", isGrammarStructure: false, examples: [] });
+        k++; fixCount++;
       }
 
       // 比较结构兜底:模型习惯把比较助词留空(より/보다/比),但 than 的对应是学习者
