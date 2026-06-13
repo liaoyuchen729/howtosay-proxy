@@ -304,7 +304,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v28";
+const SERVER_BUILD = "v29";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1626,6 +1626,33 @@ const grammarDetailSchema = {
   required: ["meaning", "structure", "examples"],
   additionalProperties: false
 };
+// 用户翻译反馈:App 翻译卡的「报告问题」按钮上报,进 Axiom 月度分析。
+// body: { sourceText, translation, sourceLanguage, style, category, flaggedWords[], detail }
+app.post("/feedback", async (req, res) => {
+  try {
+    if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    const b = req.body || {};
+    const evt = {
+      evt: "user_feedback",
+      cat: String(b.category || "other").slice(0, 20),     // alignment / grammar / translation / other
+      lang: String(b.sourceLanguage || "").slice(0, 30),
+      style: String(b.style || "").slice(0, 20),
+      src: String(b.sourceText || "").slice(0, 200),
+      tl: String(b.translation || "").slice(0, 200),
+      flagged: Array.isArray(b.flaggedWords) ? b.flaggedWords.slice(0, 20).map(x => String(x).slice(0, 40)) : [],
+      detail: String(b.detail || "").slice(0, 300),
+      ts: new Date().toISOString()
+    };
+    console.log(JSON.stringify(evt));
+    sendToAxiom(evt);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // 词典式释义:像标准 英-X 词典一样给对译词,不是模型自由发挥的描述。
 // body: { english, partOfSpeech?, sourceLanguage }   返回: { definition }
 // 同词同语言全用户共享缓存,按月刷新。
