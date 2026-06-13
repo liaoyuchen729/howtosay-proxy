@@ -1072,8 +1072,8 @@
 - [ ] of = (灰)
 - [ ] the = (灰)
 - [ ] room = 部屋
-- [ ] without = 何も
-- [ ] saying = 言わずに
+- [x] without = ずに
+- [x] saying = 言わ
 - [ ] anything = 何も
 
 ## 83. 試験に落ちて、彼はすっかり落ち込んでいる。
@@ -1083,8 +1083,8 @@
 - [ ] is = (灰)
 - [ ] completely = すっかり
 - [ ] depressed = 落ち込んでいる
-- [ ] after = (灰)
-- [ ] failing = 落ちて
+- [x] after = て
+- [x] failing = 落ち
 - [ ] the = (灰)
 - [ ] exam = 試験
 
@@ -1103,9 +1103,9 @@
 - [ ] That = あの
 - [ ] place = 店
 - [ ] is = (灰)
-- [ ] always = いつ
+- [x] always = 
 - [ ] packed = 混んでる
-- [ ] whenever = (灰)
+- [x] whenever = いつ
 - [ ] I = (灰)
 - [ ] go = 行って
 
@@ -1131,7 +1131,7 @@
 - [ ] the = (灰)
 - [ ] teacher = 先生
 - [ ] who = (灰)
-- [ ] took care〔短语〕 = お世話になった
+- [x] took care〔短语〕 = お世話
 - [ ] of = (灰)
 - [ ] me = (灰)
 
@@ -1146,22 +1146,22 @@
 - [ ] so = から
 - [ ] wanna = (灰)
 - [ ] go = (灰)
-- [ ] grab = (灰)
-- [ ] some = (灰)
-- [ ] drinks = 飲みに行かない?
+- [x] grab = (灰)
+- [x] some = (灰)
+- [x] drinks = 飲みに行かない?
 
 ## 89. 彼女は歌手としてだけでなく、女優としても活躍している。
 > She is active not only as a singer but also as an actress.
 
 - [ ] She = (灰)
-- [ ] is active〔短语〕 = 活躍している
-- [ ] not = (灰)
-- [ ] only = (灰)
+- [x] is active〔短语〕 = 活躍している
+- [x] not = (灰)
+- [x] only = (灰)
 - [ ] as = として
 - [ ] a = (灰)
 - [ ] singer = 歌手
-- [ ] but = だけでなく
-- [ ] also = も
+- [x] but = 
+- [x] also = も
 - [ ] as = として
 - [ ] an = (灰)
 - [ ] actress = 女優
@@ -1197,7 +1197,7 @@
 - [ ] you = (灰)
 - [ ] have = (灰)
 - [ ] forgotten anything〔短语〕 = 忘れ物
-- [ ] before = 前に
+- [x] before = の前に
 - [ ] departure = 出発
 
 ## 93. 彼の話を聞いているうちに、眠くなってきた。
@@ -1219,12 +1219,12 @@
 
 - [ ] I = (灰)
 - [ ] will = (灰)
-- [ ] go = 休みます
-- [ ] to = (灰)
-- [ ] bed = (灰)
+- [x] go = 休みます
+- [x] to = (灰)
+- [x] bed = (灰)
 - [ ] early = 早
-- [ ] today = 今日は
-- [ ] because = (灰)
+- [x] today = 今日
+- [x] because = なので
 - [ ] I = (灰)
 - [ ] am = (灰)
 - [ ] feeling = 気味
@@ -1254,9 +1254,9 @@
 
 - [ ] He = (灰)
 - [ ] did = (灰)
-- [ ] not = どころか
+- [x] not = 
 - [ ] get angry〔短语〕 = 怒る
-- [ ] instead = (灰)
+- [x] instead = どころか
 - [ ] he = (灰)
 - [ ] laughed = 笑って
 - [ ] and = (灰)
@@ -1267,7 +1267,7 @@
 > I just realized that I left my phone at home.
 
 - [ ] I = (灰)
-- [ ] just = (灰)
+- [x] just = 今
 - [ ] realized = 気づいた
 - [ ] that = (灰)
 - [ ] I = (灰)
@@ -1282,7 +1282,7 @@
 
 - [ ] You = (灰)
 - [ ] don't = なくても
-- [ ] gotta rush〔短语〕 = 焦らなくても
+- [x] gotta rush〔短语〕 = 焦ら
 - [ ] so much〔短语〕 = そんなに
 - [ ] there's = (灰)
 - [ ] still = まだ
@@ -1297,5 +1297,5 @@
 - [ ] a = (灰)
 - [ ] new = 新しい
 - [ ] bridge = 橋
-- [ ] is underway〔短语〕 = 進められている
+- [x] is underway〔短语〕 = 進められている
 
