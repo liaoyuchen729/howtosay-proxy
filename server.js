@@ -55,12 +55,14 @@ const POS = ["noun","verb","adjective","adverb","pronoun","preposition","conjunc
 function styleDesc(style) {
   switch (style) {
     case "casual":
-      return "casual and natural, the way a native speaker would say it to a friend. " +
-        "Use contractions (I'm, don't, gonna, wanna) and informal vocabulary where natural. " +
+      return "casual, conversational English — how you'd text or speak to a friend. " +
+        "ALWAYS use contractions (I'm, don't, can't, it's, gonna, wanna). Prefer colloquial words and " +
+        "intensifiers (so, super, really, kinda, a ton, beat, grab) over textbook ones. Relaxed and punchy. " +
+        "It MUST read clearly different from the standard/formal version — NEVER output a stiff textbook " +
+        "sentence like 'I am very tired'; say 'I'm so tired' or 'I'm beat' instead. " +
         "Do NOT prepend greetings or fillers (Hey / So / Well / Look) unless the source itself contains one — " +
         "casual means natural WORDING, not ADDED content. Translate only what the source says. " +
-        "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.' " +
-        "AVOID textbook phrasings.";
+        "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.'";
     case "formal":
       return "formal, polished, and polite — the way you would write a professional email or speak in a business " +
         "setting. NO contractions (use I am, do not, will not). Prefer full vocabulary (would like to, " +
@@ -304,7 +306,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v29";
+const SERVER_BUILD = "v30";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -447,10 +449,13 @@ app.post("/translate-fast", async (req, res) => {
     }
     const prompt =
       `Translate this ${sourceLanguage} text into natural English.\n` +
-      `STYLE: ${styleDesc(style)}\n\nText:\n${String(sourceText)}`;
+      `STYLE (commit fully — the wording itself must clearly reflect this style, NOT a neutral default; ` +
+      `a casual translation must look noticeably different from a standard/formal one, even for short sentences): ` +
+      `${styleDesc(style)}\n` +
+      `Translate only what the source says — do not add or drop meaning.\n\nText:\n${String(sourceText)}`;
     const content = await openAIJSON({
       model: MODEL,
-      temperature: 0.3,
+      temperature: 0.4,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_schema", json_schema: { name: "fast_translation", strict: true, schema: fastSchema } }
     });
