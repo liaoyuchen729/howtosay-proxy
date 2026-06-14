@@ -65,13 +65,15 @@ function styleDesc(style) {
         "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.'";
     case "formal":
       return "formal, polished, and polite — the way you would write a professional email or speak in a business " +
-        "setting. NO contractions (use I am, do not, will not). Prefer full vocabulary (would like to, " +
-        "I am afraid that, regarding, indeed). Use complete, well-structured sentences. " +
+        "setting. Use an elevated register clearly more elaborate than the standard version. " +
+        "NEVER use contractions (use I am, do not, will not). Prefer full, refined vocabulary (would like to, " +
+        "I am afraid that, regarding, indeed, shall). Use complete, well-structured sentences. " +
         "Examples: 'I am extremely tired today.' / 'Would you care to join me for a film, should you have the time?' / " +
         "'I am not fond of sea urchin.' / 'She is a remarkably gentle person.'";
     case "concise":
-      return "as short and punchy as possible while keeping the core meaning. Drop optional words, articles, " +
-        "and subjects when natural. Use the fewest words possible — under 6 words when feasible. " +
+      return "telegraphic — as short and punchy as possible while keeping the core meaning, and clearly shorter " +
+        "than the standard version. Drop optional words, articles, and subjects when natural. " +
+        "Use the fewest words possible — under 6 words when feasible. " +
         "Examples: 'So tired today.' / 'Movie later?' / 'Not a fan of sea urchin.' / 'She's super kind.'";
     default:
       return "standard, neutral, textbook-natural English — what a typical learner would expect. Balanced, " +
@@ -306,7 +308,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v30";
+const SERVER_BUILD = "v31";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -449,8 +451,9 @@ app.post("/translate-fast", async (req, res) => {
     }
     const prompt =
       `Translate this ${sourceLanguage} text into natural English.\n` +
-      `STYLE (commit fully — the wording itself must clearly reflect this style, NOT a neutral default; ` +
-      `a casual translation must look noticeably different from a standard/formal one, even for short sentences): ` +
+      `STYLE (commit fully — standard / casual / formal / concise are FOUR independent registers; the wording ` +
+      `must clearly reflect THIS one and read distinctly differently from the other three, even for short ` +
+      `sentences. casual = relaxed+contractions, formal = elevated+no contractions, concise = telegraphic+fewest words): ` +
       `${styleDesc(style)}\n` +
       `Translate only what the source says — do not add or drop meaning.\n\nText:\n${String(sourceText)}`;
     const content = await openAIJSON({
