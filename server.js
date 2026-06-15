@@ -101,16 +101,35 @@ function systemPrompt(lang) {
     `  • A noun is ALWAYS its own unit. NEVER merge a possessive / article / adjective into the noun's unit: ` +
     `"your farts" → "your" + "farts"; "my nose" → "my" + "nose"; "dog feces" → "dog" + "feces"; ` +
     `"the red car" → "the" + "red" + "car".\n` +
-    `  • Multi-word units are allowed for (a) fixed lexical items learned as ONE phrase whose meaning is ` +
-    `non-compositional: phrasal verbs ("give up"), idioms ("piece of cake"), established compounds ` +
-    `("ice cream", "sea urchin"), AND fixed multi-word adverbials / connectors / quantifiers / reciprocals ` +
-    `("one after another", "one by one", "each other", "one another", "as well as", "more and more", ` +
-    `"a lot of", "a couple of", "kind of", "sort of", "at all", "by the way", "in order to", "as soon as"); ` +
-    `(b) grammar chunks ("wouldn't have done", "might break", "worse than").\n` +
-    `    When the translation contains such a fixed phrase, KEEP IT AS ONE unit aligned to the whole source ` +
-    `span it expresses (e.g. "one after another" → sourceSpan "一个接一个"); do NOT split it into separate words. ` +
-    `Be generous about recognizing these fixed phrases — prefer one phrase unit over several bare words when ` +
-    `the words together form a set expression.\n` +
+    `  • Multi-word "phrases" are bookmarkable and SHOULD be kept as ONE unit when the words form a fixed, ` +
+    `non-compositional set expression with a single dictionary meaning. Be generous — prefer one phrase unit ` +
+    `over bare words whenever the words form a set expression. Recognized categories + examples:\n` +
+    `      - phrasal verbs: give up, give in, put off, put up with, look after, look for, look forward to, ` +
+    `figure out, find out, come up with, run into, run out of, take off, turn on, turn off, bring up, carry out, ` +
+    `point out, set up, show up, end up, go on, hold on, work out, deal with, count on, depend on, get along, get rid of;\n` +
+    `      - idioms / compounds: piece of cake, ice cream, sea urchin, make sense, make sure, take care, ` +
+    `take place, take part, pay attention, keep in mind, on second thought;\n` +
+    `      - reciprocals: each other, one another;\n` +
+    `      - fixed adverbials: one after another, one by one, more and more, again and again, over and over, ` +
+    `all of a sudden, all at once, little by little, step by step, back and forth, side by side, from time to time, ` +
+    `once in a while, sooner or later, for the time being;\n` +
+    `      - connectors / subordinators: as well as, in order to, so as to, as soon as, as long as, even though, ` +
+    `even if, as if, as though, in case, rather than, instead of, due to, owing to, thanks to, according to, ` +
+    `regardless of, apart from, in spite of, because of, such as, as for;\n` +
+    `      - quantifiers: a lot of, lots of, plenty of, a couple of, a number of, a bit of, a great deal of, ` +
+    `the rest of, all kinds of, a variety of;\n` +
+    `      - prepositional set phrases: at all, at least, at most, at first, at last, in fact, in general, ` +
+    `in particular, in addition, in advance, in short, in the end, on time, on purpose, by far, by accident, ` +
+    `for example, for instance, of course, no matter, on the other hand, at the same time, as a result, kind of, ` +
+    `sort of, by the way.\n` +
+    `    KEEP the phrase as ONE unit aligned to the WHOLE source span it expresses ` +
+    `(e.g. "one after another" → sourceSpan "一个接一个").\n` +
+    `  • Grammar chunks (these are grammar, NOT phrases): "wouldn't have done", "might break", "worse than".\n` +
+    `  • DO NOT merge compositional / open-slot grammar into a phrase — it stays split into its grammatical ` +
+    `pieces, because it is not a single fixed lexical item: "is doing (something)" → "is" + "doing"; ` +
+    `also "be going to (do)", "want to (do)", "has been doing", "the more … the more". ` +
+    `Test: a real phrase has ONE fixed dictionary meaning; if a slot can be freely filled with anything, it is ` +
+    `grammar, keep it split.\n` +
     `  • Grammar chunks must be MINIMAL — do not absorb subject pronouns or neighboring content words. ` +
     `"They smell worse than" is WRONG: split as "They" + "smell" + "worse than".\n` +
     `  For each unit:\n` +
@@ -315,7 +334,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v32";
+const SERVER_BUILD = "v33";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
