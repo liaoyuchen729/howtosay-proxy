@@ -101,9 +101,16 @@ function systemPrompt(lang) {
     `  • A noun is ALWAYS its own unit. NEVER merge a possessive / article / adjective into the noun's unit: ` +
     `"your farts" → "your" + "farts"; "my nose" → "my" + "nose"; "dog feces" → "dog" + "feces"; ` +
     `"the red car" → "the" + "red" + "car".\n` +
-    `  • Multi-word units are ONLY allowed for (a) fixed lexical items whose meaning is non-compositional: ` +
-    `phrasal verbs ("give up"), idioms ("piece of cake"), established compounds ("ice cream", "sea urchin"); ` +
+    `  • Multi-word units are allowed for (a) fixed lexical items learned as ONE phrase whose meaning is ` +
+    `non-compositional: phrasal verbs ("give up"), idioms ("piece of cake"), established compounds ` +
+    `("ice cream", "sea urchin"), AND fixed multi-word adverbials / connectors / quantifiers / reciprocals ` +
+    `("one after another", "one by one", "each other", "one another", "as well as", "more and more", ` +
+    `"a lot of", "a couple of", "kind of", "sort of", "at all", "by the way", "in order to", "as soon as"); ` +
     `(b) grammar chunks ("wouldn't have done", "might break", "worse than").\n` +
+    `    When the translation contains such a fixed phrase, KEEP IT AS ONE unit aligned to the whole source ` +
+    `span it expresses (e.g. "one after another" → sourceSpan "一个接一个"); do NOT split it into separate words. ` +
+    `Be generous about recognizing these fixed phrases — prefer one phrase unit over several bare words when ` +
+    `the words together form a set expression.\n` +
     `  • Grammar chunks must be MINIMAL — do not absorb subject pronouns or neighboring content words. ` +
     `"They smell worse than" is WRONG: split as "They" + "smell" + "worse than".\n` +
     `  For each unit:\n` +
@@ -308,7 +315,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v31";
+const SERVER_BUILD = "v32";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
