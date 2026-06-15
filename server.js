@@ -334,7 +334,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v33";
+const SERVER_BUILD = "v34";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1661,7 +1661,7 @@ const grammarDetailSchema = {
   additionalProperties: false
 };
 // 用户翻译反馈:App 翻译卡的「报告问题」按钮上报,进 Axiom 月度分析。
-// body: { sourceText, translation, sourceLanguage, style, category, flaggedWords[], detail }
+// body: { sourceText, translation, sourceLanguage, style, category, flaggedWords[], detail, alignment[{en,span,pos}] }
 app.post("/feedback", async (req, res) => {
   try {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1676,6 +1676,12 @@ app.post("/feedback", async (req, res) => {
       src: String(b.sourceText || "").slice(0, 200),
       tl: String(b.translation || "").slice(0, 200),
       flagged: Array.isArray(b.flaggedWords) ? b.flaggedWords.slice(0, 20).map(x => String(x).slice(0, 40)) : [],
+      // 当时的逐词对齐(App 上报时一并记录),审核文档直接还原,无需重译
+      align: Array.isArray(b.alignment) ? b.alignment.slice(0, 60).map(w => ({
+        en:   String(w.en   || "").slice(0, 40),
+        span: String(w.span || "").slice(0, 60),
+        pos:  String(w.pos  || "").slice(0, 20)
+      })) : [],
       detail: String(b.detail || "").slice(0, 300),
       ts: new Date().toISOString()
     };
