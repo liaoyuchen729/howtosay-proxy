@@ -334,7 +334,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v34";
+const SERVER_BUILD = "v35";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1653,11 +1653,12 @@ app.post("/word-example", async (req, res) => {
 const grammarDetailSchema = {
   type: "object",
   properties: {
+    name:      { type: "string" },
     meaning:   { type: "string" },
     structure: { type: "string" },
     examples:  { type: "array", items: wordExampleSchema, minItems: 2, maxItems: 2 }
   },
-  required: ["meaning", "structure", "examples"],
+  required: ["name", "meaning", "structure", "examples"],
   additionalProperties: false
 };
 // 用户翻译反馈:App 翻译卡的「报告问题」按钮上报,进 Axiom 月度分析。
@@ -1834,6 +1835,7 @@ app.post("/grammar-detail", async (req, res) => {
       `You explain ONE English grammar point for a learner who speaks ${lang}.\n` +
       `Grammar point: "${String(name)}"\n` +
       `Return (everything except the en examples written IN ${lang}):\n` +
+      `- name: a short, natural NAME for this grammar point IN ${lang} (never output Chinese unless ${lang} is Chinese).\n` +
       `- meaning: 1-2 sentence explanation of what this structure expresses and when to use it.\n` +
       `- structure: a one-line pattern with English keywords and ${lang} placeholders ` +
       `(e.g. "prefer + A + to + B").\n` +
