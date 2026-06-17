@@ -334,7 +334,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v35";
+const SERVER_BUILD = "v36";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -1711,39 +1711,43 @@ app.post("/word-definition", async (req, res) => {
     if (!OPENAI_API_KEY) {
       return res.status(500).json({ error: "OPENAI_API_KEY not set" });
     }
-    const { english, partOfSpeech = "", sourceLanguage = "Simplified Chinese" } = req.body || {};
+    const { english, partOfSpeech = "", sourceLanguage = "Simplified Chinese", context = "" } = req.body || {};
     if (!english || !String(english).trim()) {
       return res.status(400).json({ error: "empty english" });
     }
     const lang = String(sourceLanguage);
+    const ctx = String(context || "").slice(0, 200);
     cacheSweep();
-    const key = `${lang}|${String(english).trim().toLowerCase()}|${String(partOfSpeech)}`;
+    // v2:加入"按词性/语境给多义、语境义优先"的口径,旧的单义缓存自动失效
+    const key = `${lang}|v2|${String(english).trim().toLowerCase()}|${String(partOfSpeech)}`;
     const hit = defCache.get(key);
     if (hit) return res.json(hit);
 
-    // 先查本地真词典(日/中):零编造、零 token、零延迟
+    // 本地真词典(日/中):作为"基础义"参考。无词性时直接用(快、零 token);
+    // 有词性时只当作给模型的 grounding,因为裸词典义可能是另一个词性的常见义
+    // (例:beat 词典给"殴る、打つ",但句中是形容词"很累" → 必须补出并排在最前)
     const dictDef = dictLookup(String(english), lang);
-    if (dictDef) {
+    if (dictDef && !String(partOfSpeech).trim()) {
       const out = { definition: dictDef };
       cachePut(defCache, key, out);
       return res.json(out);
     }
 
     const prompt =
-      `You are a standard English–${lang} dictionary. Give the dictionary gloss of the English ` +
+      `You are a standard English–${lang} dictionary. Give the dictionary gloss(es) of the English ` +
       (partOfSpeech ? `${partOfSpeech} ` : "") + `"${String(english)}" in ${lang}.\n` +
+      (ctx ? `It was used in this sentence: "${ctx}". The sense matching THAT usage and the part of speech MUST be listed FIRST.\n` : "") +
+      (dictDef ? `A printed dictionary also lists: "${dictDef}" — include those senses too if correct.\n` : "") +
       `Rules:\n` +
-      `- definition: ONLY the ${lang} equivalent word(s), exactly as a printed EN–${lang} dictionary entry ` +
-      `would gloss it. A TRANSLATION, not an explanation or description.\n` +
+      `- List the 2-4 most common senses as concise ${lang} equivalent word(s), separated by "、" ` +
+      `(CJK) or ", " (others). Each sense is a TRANSLATION, not an explanation or description.\n` +
+      `- The sense used in the context / matching the part of speech comes FIRST; do not omit it.\n` +
       `- NO sentences, NO "a creature that...", NO "Xのこと/Xという生物/X的意思/que significa X", ` +
       `NO trailing punctuation.\n` +
       `- CONTRACTIONS / informal short forms (ain't, gonna, wanna, gotta): START with the full form, ` +
-      `then the gloss in ${lang}. E.g. ain't → "= am not / is not / are not + ${lang} gloss"; ` +
-      `gonna → "= going to + ${lang} gloss". The learner must see what it is short FOR.\n` +
-      `- If the word has several common senses, give the 1-3 most common glosses separated by "、" ` +
-      `(for CJK) or ", " (for other scripts).\n` +
-      `Examples: "sea urchin" → "ウニ" (Japanese); "farts" → "おなら"; "break" → "壊す、休憩"; ` +
-      `"travel" → "旅行する、移動する".`;
+      `then the gloss in ${lang}.\n` +
+      `Examples: "beat" (adjective, "I'm beat today") → "へとへとに疲れた、殴る・打つ、(音楽)拍子"; ` +
+      `"sea urchin" → "ウニ"; "break" → "壊す、休憩、割れる".`;
     const content = await openAIJSON({
       model: DICT_MODEL,
       temperature: 0.2,
