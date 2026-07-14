@@ -9,6 +9,7 @@ import express from "express";
 import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { mountZhRoutes } from "./zh-routes.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -1866,5 +1867,13 @@ app.post("/grammar-detail", async (req, res) => {
 
 loadCaches();
 loadDicts();
+
+// —— How to Say 中文版路由(目标语言=中文,复用同一服务)——
+// 只做增量:挂 /zh/* 路由,不改动上面英文版任何路由。
+mountZhRoutes(app, {
+  openAIJSON, MODEL, DICT_MODEL, APP_SHARED_SECRET,
+  monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`How to Say proxy listening on ${port}`));
