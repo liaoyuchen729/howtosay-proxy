@@ -1,3 +1,6 @@
 node_modules/
 .env
 .app-secret
+.DS_Store
+package-lock.json
+node_modules/
