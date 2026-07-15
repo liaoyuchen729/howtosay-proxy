@@ -71,9 +71,22 @@ function systemPromptZh(srcLang, script) {
     `  • chinese: its Chinese text (in ${scriptName(script)}).\n` +
     `  • pinyin: Hanyu Pinyin WITH TONE MARKS for this unit (e.g. "hěn", "pǎo bù"). For a non-Chinese unit use "".\n` +
     `  • partOfSpeech: exactly one of [${POS_ZH.join(", ")}].\n` +
-    `  • sourceSpan: the substring of the USER'S ORIGINAL INPUT this unit corresponds to, copied character-for-character. ` +
-    `Chinese word order differs from the source — align by meaning, not position. If the Chinese unit has no counterpart ` +
-    `in the source (a particle Chinese must add), use "".\n` +
+    `  • sourceSpan — STRICT ALIGNMENT RULES (getting these wrong breaks the app; follow exactly):\n` +
+    `    A. sourceSpan is a substring COPIED CHARACTER-FOR-CHARACTER from the user's ORIGINAL input (same script, ` +
+    `same spelling, same inflection). Never paraphrase, translate, or normalize it.\n` +
+    `    B. Align by MEANING, not by position — the source and Chinese word orders differ. Map each Chinese unit to the ` +
+    `SHORTEST source substring that carries the same meaning.\n` +
+    `    C. Align CONTENT to CONTENT. Do NOT swallow the source's own function words into a content unit:\n` +
+    `       · ${srcLang === "Japanese" ? "Japanese: strip particles は/が/を/に/で/も/の/へ/と and copula だ/です/である — あなた→你 (NOT あなたは), 本→书 (NOT 本を). Map 是 to a copula です/だ only if one is actually present, else \"\"." : "English: strip articles a/an/the and bare prepositions of/to when they are not what the Chinese word means — book→书 (NOT the book), student→学生 (NOT a student)."}\n` +
+    `    D. Words that Chinese ADDS with no source counterpart MUST use sourceSpan "" — commonly: the copula 是, the ` +
+    `particles 的 / 了 / 着 / 过 / 得 / 地, added adverbs 都 / 也 / 就 / 还, and measure words 个/本/张 when the source has ` +
+    `no number+counter. Never invent a span for these; "" is correct.\n` +
+    `    E. Each source substring may be claimed by AT MOST ONE Chinese unit. Two Chinese units must never share the same ` +
+    `sourceSpan (that paints a false match). If unsure, prefer "".\n` +
+    `    Worked example (${srcLang} → Chinese):\n` +
+    `${srcLang === "Japanese"
+        ? "      私はあなたのことが大好きです → 我(私) + 非常(大) + 喜欢(好き) + 你(あなたのこと);  は/が/です → not aligned."
+        : "      I really like you → 我(I) + 非常(really) + 喜欢(like) + 你(you)."}\n` +
     `- grammarPoints: list the Chinese grammar points this sentence uses. For each:\n` +
     `  • templateKey: if it matches one of these exactly, copy it verbatim; else "". List:\n${TEMPLATE_NAMES_ZH.join(" | ")}\n` +
     `  • triggerWords: the Chinese fragment(s) in the translation that trigger it (e.g. ["把"], ["越来越"]).\n` +
