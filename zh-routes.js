@@ -279,6 +279,9 @@ export function mountZhRoutes(app, deps) {
   const { openAIJSON, MODEL, DICT_MODEL, APP_SHARED_SECRET,
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
 
+  // 版本探针:确认部署是否落地
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.2", fixup: true }));
+
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
       res.status(401).json({ error: "unauthorized" });
