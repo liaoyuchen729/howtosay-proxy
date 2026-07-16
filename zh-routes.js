@@ -203,7 +203,9 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       }
       if (w.chinese === "在" && ["on", "in", "at", "On", "In", "At"].includes(w.sourceSpan)) {
         for (let j = i + 1; j < Math.min(i + 4, m2.length); j++) {
-          if (["上", "里", "中", "下"].includes(m2[j].chinese) && !m2[j].sourceSpan) {
+          // 方位词空着、或与 在 抢同一个 span(模型俩都标 on)→ 都转移给方位词
+          if (["上", "里", "中", "下"].includes(m2[j].chinese) &&
+              (!m2[j].sourceSpan || m2[j].sourceSpan === w.sourceSpan)) {
             m2[j].sourceSpan = w.sourceSpan; w.sourceSpan = ""; break;
           }
         }
@@ -280,7 +282,7 @@ export function mountZhRoutes(app, deps) {
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.2", fixup: true }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.3", fixup: true }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
