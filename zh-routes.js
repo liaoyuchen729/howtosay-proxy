@@ -62,35 +62,139 @@ function systemPromptZh(srcLang, script) {
     `- translation: a Chinese translation of the input, in the STYLE given at the top of the user message. ` +
     `Pick wording clearly distinct from the other three styles.\n` +
     `- words: split the Chinese translation into meaningful units IN ORDER, together covering the whole translation.\n` +
-    `  • A content word (noun/verb/adjective) is its own unit; do NOT merge a measure word or particle into it: ` +
-    `"三本书" → "三" + "本" + "书"; "很累" → "很" + "累".\n` +
-    `  • Keep a fixed multi-character expression (idiom / set phrase / chengyu) as ONE unit (partOfSpeech "idiom").\n` +
-    `  • Grammar structures are NOT words: 把…、被…、是…的、V得C、越来越… — mark these isGrammarStructure=true; keep them minimal, ` +
-    `do not absorb neighboring content words.\n` +
+    `  SPLITTING — units that BELONG TOGETHER stay ONE unit (they express one source concept jointly):\n` +
+    `  • number/demonstrative + measure word: 三本 / 两只 / 一个 / 这部 / 那条 = ONE unit (never 三 + 本). The noun stays separate: 三本 + 书.\n` +
+    `  • verb + aspect 了/过: 买了 / 去过 = ONE unit (bought / been to are single source words).\n` +
+    `  • modal + verb when the source is ONE potential/negative form: 会弹←弾けます, 不会说←話せません, 不懂←分かりません, 没睡着←眠れなかった = ONE unit each.\n` +
+    `  • pronoun + 的 possessive: 我的←mine/my, 她的←her = ONE unit.\n` +
+    `  • multi-word time expressions: 今天早上←this morning, 每天早上←毎朝 = ONE unit.\n` +
+    `  • idioms / set phrases / chengyu = ONE unit (partOfSpeech "idiom").\n` +
+    `  Otherwise a content word is its own unit ("很累" → "很" + "累").\n` +
+    `  Grammar structures (把…、被…、是…的、V得C、越来越…) are marked isGrammarStructure=true; keep them minimal.\n` +
     `  For each unit:\n` +
     `  • chinese: its Chinese text (in ${scriptName(script)}).\n` +
     `  • pinyin: Hanyu Pinyin WITH TONE MARKS for this unit (e.g. "hěn", "pǎo bù"). For a non-Chinese unit use "".\n` +
     `  • partOfSpeech: exactly one of [${POS_ZH.join(", ")}].\n` +
     `  • sourceSpan — STRICT ALIGNMENT RULES (getting these wrong breaks the app; follow exactly):\n` +
-    `    A. sourceSpan is a substring COPIED CHARACTER-FOR-CHARACTER from the user's ORIGINAL input (same script, ` +
-    `same spelling, same inflection). Never paraphrase, translate, or normalize it.\n` +
-    `    B. Align by MEANING, not by position — the source and Chinese word orders differ. Map each Chinese unit to the ` +
-    `SHORTEST source substring that carries the same meaning.\n` +
-    `    C. Align CONTENT to CONTENT. Do NOT swallow the source's own function words into a content unit:\n` +
-    `       · ${srcLang === "Japanese" ? "Japanese: strip particles は/が/を/に/で/も/の/へ/と and copula だ/です/である — あなた→你 (NOT あなたは), 本→书 (NOT 本を). Map 是 to a copula です/だ only if one is actually present, else \"\"." : "English: strip articles a/an/the and bare prepositions of/to when they are not what the Chinese word means — book→书 (NOT the book), student→学生 (NOT a student)."}\n` +
-    `    D. Words that Chinese ADDS with no source counterpart MUST use sourceSpan "" — commonly: the copula 是, the ` +
-    `particles 的 / 了 / 着 / 过 / 得 / 地, added adverbs 都 / 也 / 就 / 还, and measure words 个/本/张 when the source has ` +
-    `no number+counter. Never invent a span for these; "" is correct.\n` +
-    `    E. Each source substring may be claimed by AT MOST ONE Chinese unit. Two Chinese units must never share the same ` +
-    `sourceSpan (that paints a false match). If unsure, prefer "".\n` +
-    `    Worked example (${srcLang} → Chinese):\n` +
+    `    A. sourceSpan is a CONTIGUOUS substring COPIED CHARACTER-FOR-CHARACTER from the user's ORIGINAL input. ` +
+    `Never paraphrase, translate, normalize, or invent text that is not literally in the input.\n` +
+    `    B. Align by MEANING, not position. Map each Chinese unit to the SHORTEST source substring carrying that meaning.\n` +
+    `    C. "" (no counterpart) is NORMAL and CORRECT — never force a match. In particular:\n` +
+    `       · ${srcLang === "Japanese" ? "Japanese usually OMITS the subject: added 我/你/我们 → \"\" unless 私/あなた/彼 etc. is literally present. NEVER align 我 to an unrelated word." : "Added pronouns/particles with no counterpart → \"\"."}\n` +
+    `       · Chinese-added words → "": structural 的/地/得 (relative-clause 的, adverbial 地), added 都/也/就/还, ` +
+    `added coverb 在 when the localizer 上/里 already claims the source preposition, added nouns like 钱 in 多少钱←how much.\n` +
+    `    D. Each source substring may be claimed by AT MOST ONE unit — never let two units share a span. ` +
+    `If two Chinese words jointly translate one source word, make them ONE unit (see SPLITTING) instead of duplicating.\n` +
+    `    E. Align function words to their true counterparts when present:\n` +
+    `       · copula 是 ← is/am/are${srcLang === "Japanese" ? "/です/だ" : ""} (only "" when the source truly has no copula; never align 是 to a non-copula で).\n` +
+    `       · 吗 ← ${srcLang === "Japanese" ? "か;  吧 ← ましょう/ませんか;  既…又 ← …し…し;  如果 ← たら/れば (just the conditional ending, e.g. 如果←たら NOT いらっしゃったら);  即使 ← ても/であれ" : "the question auxiliary do/did only if nothing else fits, else \"\";  吧 ← let's"}.\n` +
+    `       · locative/instrumental: 在 ← ${srcLang === "Japanese" ? "で (locative particle)" : "in/at"}, 上 ← on, 里 ← in;  坐 ← ${srcLang === "Japanese" ? "instrumental で or \"\"" : "by"};  被 ← by (passive agent);  把 ← "".\n` +
+    `       · ${srcLang === "Japanese" ? "compound verbs SPLIT: 持って行って → 带←持って + 去←行って;  たい→想;  strip particles は/が/を/に/も/の from spans (彼→他 NOT 彼は)" : "verb inflections: align the inflected form (去←goes is fine), but each form only once"}.\n` +
+    `    Worked examples (${srcLang} → Chinese):\n` +
     `${srcLang === "Japanese"
-        ? "      私はあなたのことが大好きです → 我(私) + 非常(大) + 喜欢(好き) + 你(あなたのこと);  は/が/です → not aligned."
-        : "      I really like you → 我(I) + 非常(really) + 喜欢(like) + 你(you)."}\n` +
+        ? "      彼は日本語が話せます → 他(彼) + 会说(話せます,ONE unit) + 日语(日本語)\n" +
+          "      コーヒーを二杯飲みました → 我(\"\") + 喝了(飲みました) + 两杯(二杯) + 咖啡(コーヒー)\n" +
+          "      家でゆっくり休みたい → 想(たい) + 在(で) + 家(家) + 好好(ゆっくり) + 休息(休み)"
+        : "      I bought three books → 我(I) + 买了(bought) + 三本(three) + 书(books)\n" +
+          "      The book is mine → 书(book) + 是(is) + 我的(mine);  the → \"\"\n" +
+          "      There are two cats in the garden → 花园(the garden) + 里(in) + 有(There are) + 两只(two) + 猫(cats)"}\n` +
     `- grammarPoints: list the Chinese grammar points this sentence uses. For each:\n` +
     `  • templateKey: if it matches one of these exactly, copy it verbatim; else "". List:\n${TEMPLATE_NAMES_ZH.join(" | ")}\n` +
     `  • triggerWords: the Chinese fragment(s) in the translation that trigger it (e.g. ["把"], ["越来越"]).\n` +
     `  • name: if templateKey=="" a short Chinese name for the point; else "".`;
+}
+
+// ============ 词对齐确定性修正(不靠模型自觉,代码强制)============
+// 依据 2026-07 用户 100 题人工标注得出的系统性错误修正:
+// ① span 必须是原文的连续子串(模型幻觉→清空)
+// ② 日语:span 末尾的助词剥掉(彼は→彼);中文代词在日语没主语时不许乱认领
+// ③ 相邻两块认领同一 span → 合并成一块(会+说←話せます → 会说←話せます)
+// ④ 数词/指示词+量词 合并(三+本→三本);动词+了/过 合并(买+了→买了);代词+的 合并(我+的→我的)
+// ⑤ 标点块不许认领文字;全局去重(同一 span 只能被认领一次,后者清空)
+const JA_TRAIL_PARTICLES = new Set(["は","が","を","に","へ","と","も","の","や","ね","よ"]);
+const JA_PRONOUNS = ["私","僕","俺","あなた","君","彼女","彼","我々","皆"];
+const ZH_PRONOUNS = new Set(["我","你","您","我们","你们","他","她","它","他们","她们","咱们"]);
+const NUM_DEM_CHARS = new Set("一二三四五六七八九十百千万两几半这那哪每");
+const PUNCT_RE = /^[，。？！、,.?!:;:;…\s]+$/;
+
+function fixupZhAlignment(sourceText, words, srcLang) {
+  if (!Array.isArray(words) || !words.length) return words;
+  let ws = words.map(w => ({ ...w }));
+
+  // ① 子串校验
+  for (const w of ws) {
+    if (w.sourceSpan && !sourceText.includes(w.sourceSpan)) w.sourceSpan = "";
+  }
+  // ② 日语专项
+  if (srcLang === "Japanese") {
+    for (const w of ws) {
+      let s = w.sourceSpan || "";
+      while (s.length > 1 && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
+      // 末尾 で:
+      // · 在/坐/用(介引作用)→ 收缩到只认 で 本身(ここで→で,由 这里 认领 ここ)
+      // · 动词块(て形:飲んで/泳いで)→ 保留,で 是动词的一部分
+      // · 其他(名词+locative で)→ 剥掉
+      if (s.length > 1 && s.endsWith("で")) {
+        if (["在", "坐", "用"].includes(w.chinese)) s = "で";
+        else if (w.partOfSpeech !== "verb") s = s.slice(0, -1);
+      }
+      if (s !== w.sourceSpan) w.sourceSpan = (s && sourceText.includes(s)) ? s : "";
+      // 代词防幻觉:日语原文没这个代词就不许认领任何东西
+      if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan &&
+          !JA_PRONOUNS.some(p => w.sourceSpan.includes(p))) {
+        w.sourceSpan = "";
+      }
+    }
+  }
+  // ⑤a 标点块
+  for (const w of ws) {
+    if (PUNCT_RE.test(w.chinese) && w.sourceSpan && !PUNCT_RE.test(w.sourceSpan)) w.sourceSpan = "";
+  }
+  // ③ 相邻同 span 合并(链式:不+会+说 都←話せません → 不会说)
+  const m1 = [];
+  for (const w of ws) {
+    const prev = m1[m1.length - 1];
+    if (prev && w.sourceSpan && prev.sourceSpan === w.sourceSpan && !PUNCT_RE.test(w.chinese)) {
+      prev.chinese += w.chinese;
+      prev.pinyin = [prev.pinyin, w.pinyin].filter(Boolean).join(" ");
+      prev.isGrammarStructure = prev.isGrammarStructure && w.isGrammarStructure;
+      continue;
+    }
+    m1.push(w);
+  }
+  // ④ 结构性合并
+  const m2 = [];
+  for (let i = 0; i < m1.length; i++) {
+    const w = m1[i], n = m1[i + 1];
+    const isNumDem = [...w.chinese].every(c => NUM_DEM_CHARS.has(c));
+    if (n && isNumDem && n.partOfSpeech === "measureWord") {           // 三+本 → 三本
+      m2.push(mergeUnits(w, n, w.partOfSpeech)); i++; continue;
+    }
+    if (n && w.partOfSpeech === "verb" && (n.chinese === "了" || n.chinese === "过")) {  // 买+了 → 买了
+      m2.push(mergeUnits(w, n, "verb")); i++; continue;
+    }
+    if (n && w.partOfSpeech === "pronoun" && n.chinese === "的") {     // 我+的 → 我的
+      m2.push(mergeUnits(w, n, "pronoun")); i++; continue;
+    }
+    m2.push(w);
+  }
+  // ⑤b 全局去重:同一非空 span 只能出现一次(保留先出现的)
+  const seen = new Set();
+  for (const w of m2) {
+    if (!w.sourceSpan) continue;
+    if (seen.has(w.sourceSpan)) w.sourceSpan = "";
+    else seen.add(w.sourceSpan);
+  }
+  return m2;
+}
+function mergeUnits(a, b, pos) {
+  return {
+    chinese: a.chinese + b.chinese,
+    pinyin: [a.pinyin, b.pinyin].filter(Boolean).join(" "),
+    partOfSpeech: pos,
+    sourceSpan: a.sourceSpan || b.sourceSpan || "",
+    isGrammarStructure: false
+  };
 }
 
 const wordSchemaZh = {
@@ -184,12 +288,14 @@ export function mountZhRoutes(app, deps) {
         messages: [ sys(systemPromptZh(sourceLanguage, script)), usr(userMsg) ]
       });
       const parsed = JSON.parse(content);
+      // 词对齐确定性修正(去幻觉/剥助词/合并/去重)—— 见 fixupZhAlignment
+      const words = fixupZhAlignment(sourceText, parsed.words || [], sourceLanguage);
       // grammarPoints: templateKey 命中就用它当 name(App 据 name 查本地模板)
       const grammarPoints = (parsed.grammarPoints || []).map(g => ({
         name: g.templateKey && g.templateKey.length ? g.templateKey : (g.name || ""),
         triggerWords: g.triggerWords || []
       })).filter(g => g.name);
-      res.json({ translation: parsed.translation, words: parsed.words || [], grammarPoints });
+      res.json({ translation: parsed.translation, words, grammarPoints });
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
   });
 
