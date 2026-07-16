@@ -132,11 +132,15 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       while (s.length > 1 && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
       // 末尾 で:
       // · 在/坐/用(介引作用)→ 收缩到只认 で 本身(ここで→で,由 这里 认领 ここ)
-      // · 动词块(て形:飲んで/泳いで)→ 保留,で 是动词的一部分
-      // · 其他(名词+locative で)→ 剥掉
+      // · て形动词(飲んで/泳いで:ん/い+で)→ 保留,で 是动词的一部分
+      // · 其他(名词+locative/copula で,如 雨で)→ 剥掉
       if (s.length > 1 && s.endsWith("で")) {
         if (["在", "坐", "用"].includes(w.chinese)) s = "で";
-        else if (w.partOfSpeech !== "verb") s = s.slice(0, -1);
+        else if (!(s.length > 1 && (s[s.length - 2] === "ん" || s[s.length - 2] === "い"))) s = s.slice(0, -1);
+      }
+      // 末尾 たら/れば 条件形:让给 如果/要是;动词块只保留到 た(いらっしゃったら→いらっしゃった)
+      if (s.length > 2 && s.endsWith("たら") && !["如果", "要是", "的话"].includes(w.chinese)) {
+        s = s.slice(0, -1);   // 去掉 ら,保留 …た
       }
       if (s !== w.sourceSpan) w.sourceSpan = (s && sourceText.includes(s)) ? s : "";
       // 代词防幻觉:日语原文没这个代词就不许认领任何东西
@@ -209,12 +213,22 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       }
     }
   }
-  // ⑤b 全局去重:同一非空 span 只能出现一次(保留先出现的)
-  const seen = new Set();
+  // ⑤b 位置感知的认领去重(与 App 端 AlignedTextView 同逻辑):
+  //    按顺序为每块在原文里找「未被占用」的出现位置;同一段原文只能被认领一次,
+  //    位置全被占(重复认领 / 包含型重叠,如 问题←質問 ⊂ 問←質問して)→ span 清空。
+  const claimed = [];
   for (const w of m2) {
-    if (!w.sourceSpan) continue;
-    if (seen.has(w.sourceSpan)) w.sourceSpan = "";
-    else seen.add(w.sourceSpan);
+    const s = w.sourceSpan;
+    if (!s) continue;
+    let idx = 0, placed = false;
+    while (true) {
+      const p = sourceText.indexOf(s, idx);
+      if (p === -1) break;
+      const overlaps = claimed.some(([a, b]) => p < b && p + s.length > a);
+      if (!overlaps) { claimed.push([p, p + s.length]); placed = true; break; }
+      idx = p + 1;
+    }
+    if (!placed) w.sourceSpan = "";
   }
   return m2;
 }
