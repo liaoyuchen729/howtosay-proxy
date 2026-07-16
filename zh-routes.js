@@ -178,6 +178,37 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     }
     m2.push(w);
   }
+  // ⑥ 介词/标记转移(用户标注得出的确定性规则)
+  //   把←put 这类:把 是语法标记,span 让给后面的动词;被←was → 被←by(若原文有 by);
+  //   在←on/in + 后面有空着的方位词 上/里 → span 让给方位词;坐←goes + 原文有 by → 坐←by
+  const BE_FORMS = new Set(["was", "were", "is", "are", "be", "been", "Was", "Were", "Is", "Are"]);
+  const GO_FORMS = /^(go(es)?|went|take[sn]?|took|get[s]?|got)$/i;
+  for (let i = 0; i < m2.length; i++) {
+    const w = m2[i];
+    if (w.chinese === "把" && w.sourceSpan) {                      // 把 → 让给后面的动词
+      for (let j = i + 1; j < Math.min(i + 4, m2.length); j++) {
+        if (m2[j].partOfSpeech === "verb" && !m2[j].sourceSpan) {
+          m2[j].sourceSpan = w.sourceSpan; break;
+        }
+      }
+      w.sourceSpan = "";
+    }
+    if (srcLang === "English") {
+      if (w.chinese === "被" && BE_FORMS.has(w.sourceSpan) && /\bby\b/.test(sourceText)) {
+        w.sourceSpan = "by";
+      }
+      if (w.chinese === "在" && ["on", "in", "at", "On", "In", "At"].includes(w.sourceSpan)) {
+        for (let j = i + 1; j < Math.min(i + 4, m2.length); j++) {
+          if (["上", "里", "中", "下"].includes(m2[j].chinese) && !m2[j].sourceSpan) {
+            m2[j].sourceSpan = w.sourceSpan; w.sourceSpan = ""; break;
+          }
+        }
+      }
+      if (["坐", "骑", "开", "乘"].includes(w.chinese) && GO_FORMS.test(w.sourceSpan) && /\bby\b/.test(sourceText)) {
+        w.sourceSpan = "by";
+      }
+    }
+  }
   // ⑤b 全局去重:同一非空 span 只能出现一次(保留先出现的)
   const seen = new Set();
   for (const w of m2) {
