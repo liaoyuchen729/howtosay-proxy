@@ -316,8 +316,10 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       "了": ["rồi", "đã", "xong"], "在": ["đang", "ở", "tại"], "正在": ["đang"],
       "会": ["sẽ", "biết"], "要": ["sẽ", "muốn", "cần"], "的": ["của"],
       "被": ["bị", "được"], "很": ["rất", "lắm"], "也": ["cũng"], "都": ["đều"],
-      "是": ["là"], "给": ["cho", "Cho"], "和": ["và"], "跟": ["với"]
+      "是": ["là"], "给": ["cho", "Cho"], "和": ["và"], "跟": ["với"],
+      "能": ["được", "có thể"], "不太": ["không"], "不": ["không", "chưa", "đừng"]
     };
+    const VI_FUNC = ["đang", "đã", "sẽ", "rồi", "quá", "hơn", "của", "là", "không"];
     for (const w of ws) {
       if (CANON[w.chinese]) canonicalize(w, CANON[w.chinese], true);
       // 代词块吞词组 → 收缩到代词本词
@@ -325,6 +327,20 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         const VP = ["tôi", "bạn", "anh", "chị", "em", "cô", "ông", "bà", "chúng", "họ", "nó", "mình"];
         const hit = w.sourceSpan.split(/\s+/).find(x => VP.includes(x.toLowerCase()));
         w.sourceSpan = hit || "";
+      }
+      // 多词代词补全:Anh ấy / Chúng tôi 是完整代词,不能只认一半
+      if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan && !w.sourceSpan.includes(" ")) {
+        for (const suf of [" ấy", " tôi", " ta", " mình"]) {
+          if (sourceText.includes(w.sourceSpan + suf)) { w.sourceSpan = w.sourceSpan + suf; break; }
+        }
+      }
+      // 实词块(名/动/形)吞了功能词 → 从边缘剥掉(Mẹ đang→Mẹ),功能词留给对应块
+      if (["noun", "verb", "adjective"].includes(w.partOfSpeech) && w.sourceSpan && w.sourceSpan.includes(" ")) {
+        let parts = w.sourceSpan.split(/\s+/);
+        while (parts.length > 1 && VI_FUNC.includes(parts[parts.length - 1].toLowerCase())) parts.pop();
+        while (parts.length > 1 && VI_FUNC.includes(parts[0].toLowerCase())) parts.shift();
+        const joined = parts.join(" ");
+        if (joined !== w.sourceSpan && sourceText.includes(joined)) w.sourceSpan = joined;
       }
     }
   }
@@ -382,6 +398,11 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan && w.sourceSpan.includes(" ")) {
         const hit = w.sourceSpan.split(/\s+/).find(x => ID_PRON.includes(x.toLowerCase()));
         w.sourceSpan = hit || "";
+      }
+      // 名词块尾部吞 itu/ini → 剥掉(pesta itu→pesta),留给指示词块
+      if (["noun"].includes(w.partOfSpeech) && / (itu|ini)$/i.test(w.sourceSpan || "")) {
+        const stripped = w.sourceSpan.replace(/ (itu|ini)$/i, "");
+        if (sourceText.includes(stripped)) w.sourceSpan = stripped;
       }
       if (/^[这那這][个些家]?$/.test(w.chinese) && w.sourceSpan) {
         if (/\b(itu|ini)\b/i.test(w.sourceSpan)) w.sourceSpan = /itu/i.test(w.sourceSpan) ? "itu" : "ini";
@@ -615,7 +636,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.0", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.1", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
