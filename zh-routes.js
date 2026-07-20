@@ -159,43 +159,73 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   }
   // ② 日语专项
   if (srcLang === "Japanese") {
-    for (const w of ws) {
+    const DEMS = ["この", "その", "あの", "どの"];
+    // 指示词+量词(这个/那家/那朵…),不含 这里/那里/这样/那么 等地点·方式词
+    const DEM_CHIP = /^[这那這][个家本条只件张辆位杯瓶部台块朵份间棵颗支首场次页篇封双对]?$/u;
+    const pendingTransfers = [];   // [chipIndex, span] 被守卫清掉、待转移给后面空名词块的 span
+    for (let i = 0; i < ws.length; i++) {
+      const w = ws[i];
       let s = w.sourceSpan || "";
+      const orig = s;
+      // ① 连词收缩(要在剥助词之前判断,不然 ですが 先被剥成 です)
+      if (["因为"].includes(w.chinese) && orig.length > 2 && orig.endsWith("ので")) { w.sourceSpan = "ので"; continue; }
+      if (["但", "但是", "可是", "不过"].includes(w.chinese) && orig.length > 1 && orig.endsWith("が")) { w.sourceSpan = "が"; continue; }
+      if (["虽然", "尽管"].includes(w.chinese) && orig.length > 2 && orig.endsWith("のに")) { w.sourceSpan = "のに"; continue; }
+      // ② 剥尾助词(保护词跳过:この/やっと/ので/まで…)
       while (s.length > 1 && !JA_PROTECTED.has(s) && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
-      // 末尾 で:
-      // · 在/坐/用(介引作用)→ 收缩到只认 で 本身(ここで→で,由 这里 认领 ここ)
-      // · て形动词(飲んで/泳いで:ん/い+で)→ 保留,で 是动词的一部分
-      // · 其他(名词+locative/copula で,如 雨で)→ 剥掉
+      // ③ 末尾 で
       if (s.length > 1 && s.endsWith("で") && !JA_PROTECTED.has(s)) {
         if (["在", "坐", "用"].includes(w.chinese)) s = "で";
-        else if (!(s.length > 1 && (s[s.length - 2] === "ん" || s[s.length - 2] === "い"))) s = s.slice(0, -1);
+        else if (!(s[s.length - 2] === "ん" || s[s.length - 2] === "い")) s = s.slice(0, -1);
       }
-      // 末尾 たら/れば 条件形:让给 如果/要是;动词块只保留到 た(いらっしゃったら→いらっしゃった)
-      if (s.length > 2 && s.endsWith("たら") && !["如果", "要是", "的话"].includes(w.chinese)) {
-        s = s.slice(0, -1);   // 去掉 ら,保留 …た
+      // ④ 末尾 たら 条件形(让给 如果;动词保留到 た)
+      if (s.length > 2 && s.endsWith("たら") && !["如果", "要是", "的话"].includes(w.chinese)) s = s.slice(0, -1);
+      w.sourceSpan = (s && sourceText.includes(s)) ? s : "";
+      // ⑤ 在:日语里只许对齐 で;认领了 の前 这类 → 把 前/後 转移给对应块后清空
+      if (w.chinese === "在" && w.sourceSpan && w.sourceSpan !== "で") {
+        if (w.sourceSpan.includes("前")) pendingTransfers.push(["前后", "前"]);
+        else if (w.sourceSpan.includes("後")) pendingTransfers.push(["前后", "後"]);
+        w.sourceSpan = "";
       }
-      if (s !== w.sourceSpan) w.sourceSpan = (s && sourceText.includes(s)) ? s : "";
-      // 代词防幻觉:日语原文没这个代词就不许认领任何东西
+      // ⑥ 代词防幻觉
       if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan &&
           !JA_PRONOUNS.some(p => w.sourceSpan.includes(p))) {
         w.sourceSpan = "";
       }
-      // 指示词守卫:这个/那家/这本… 只许对齐 この/その/あの/どの(整体);
-      // 认领了更长的(那家←新しいラーメン屋)→ 收缩到指示词本体或清空
-      if (/^[这那這]/.test(w.chinese) && w.sourceSpan) {
-        const dem = ["この", "その", "あの", "どの"].find(d => w.sourceSpan.startsWith(d));
+      // ⑦ 指示词守卫(那家←新しいラーメン屋 → ∅;这个←この漢字 → この)
+      if (DEM_CHIP.test(w.chinese) && w.sourceSpan) {
+        const dem = DEMS.find(d => w.sourceSpan.startsWith(d));
         if (dem) w.sourceSpan = dem;
-        else if (!["この","その","あの","どの"].includes(w.sourceSpan)) w.sourceSpan = "";
+        else if (!DEMS.includes(w.sourceSpan)) w.sourceSpan = "";
       }
-      // 单字能愿/虚词块(会/要/想…)不许认领日语汉字实词(会←会議 之类)
+      // ⑧ 单字能愿/虚词不许认领纯汉字实词(会←会議);清掉的 span 转移给后面空名词块
       if (w.chinese.length === 1 && ["auxiliary", "particle", "adverb"].includes(w.partOfSpeech) &&
-          w.sourceSpan && w.sourceSpan.length >= 2 && /[\u4E00-\u9FFF]/.test(w.sourceSpan)) {
+          /^[\u4E00-\u9FFF]{2,}$/.test(w.sourceSpan || "")) {
+        pendingTransfers.push(["名词", w.sourceSpan]);
         w.sourceSpan = "";
       }
-      // 连词收缩:因为←…ので → ので;但/可是←…が → が;虽然←…のに → のに
-      if (["因为"].includes(w.chinese) && w.sourceSpan.length > 2 && w.sourceSpan.endsWith("ので")) w.sourceSpan = "ので";
-      if (["但", "但是", "可是", "不过"].includes(w.chinese) && w.sourceSpan.length > 1 && w.sourceSpan.endsWith("が")) w.sourceSpan = "が";
-      if (["虽然", "尽管"].includes(w.chinese) && w.sourceSpan.length > 2 && w.sourceSpan.endsWith("のに")) w.sourceSpan = "のに";
+      // ⑨ 的/地/得:日语里只许对齐 の(或空)
+      if (["的", "地", "得"].includes(w.chinese) && w.sourceSpan && w.sourceSpan !== "の") {
+        w.sourceSpan = "";
+      }
+      // ⑩ AのB 认领整串的名词块:挨着 的 块 → 只取自己那半(一只狗←犬の形 → 犬)
+      if (w.partOfSpeech === "noun" && /^[^の]+の[^の]+$/.test(w.sourceSpan || "")) {
+        const [a, b] = w.sourceSpan.split("の");
+        const next = ws[i + 1], prev = ws[i - 1];
+        if (next && next.chinese === "的") w.sourceSpan = a;
+        else if (prev && prev.chinese === "的") w.sourceSpan = b;
+      }
+    }
+    // 执行转移:清掉的 span 给最近的空名词块(会議→会议;前→前)
+    for (const [kind, span] of pendingTransfers) {
+      for (const w of ws) {
+        if (w.sourceSpan) continue;
+        if (kind === "前后" && ["前", "之前", "以前", "后", "之后", "以后"].includes(w.chinese) &&
+            sourceText.includes(span)) { w.sourceSpan = span; break; }
+        if (kind === "名词" && w.partOfSpeech === "noun" && sourceText.includes(span)) {
+          w.sourceSpan = span; break;
+        }
+      }
     }
   }
   if (srcLang === "Korean") {
@@ -371,7 +401,7 @@ export function mountZhRoutes(app, deps) {
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.5", fixup: true }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.6", fixup: true }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
