@@ -171,6 +171,14 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       if (["因为"].includes(w.chinese) && orig.length > 2 && orig.endsWith("ので")) { w.sourceSpan = "ので"; continue; }
       if (["但", "但是", "可是", "不过"].includes(w.chinese) && orig.length > 1 && orig.endsWith("が")) { w.sourceSpan = "が"; continue; }
       if (["虽然", "尽管"].includes(w.chinese) && orig.length > 2 && orig.endsWith("のに")) { w.sourceSpan = "のに"; continue; }
+      // ①b 固定映射:样态词带で(みたいで=像…的样子)收缩到词根;あと(で) 让给 后
+      const JA_SHRINK = { "みたいで": "みたい", "ようで": "よう", "そうで": "そう" };
+      if (JA_SHRINK[s]) s = JA_SHRINK[s];
+      if ((s.endsWith("あとで") || s.endsWith("あと")) && s.length > 3 &&
+          !["后", "之后", "以后"].includes(w.chinese)) {
+        pendingTransfers.push(["前后", s.endsWith("あとで") ? "あとで" : "あと"]);
+        s = s.replace(/あとで?$/, "");
+      }
       // ② 剥尾助词(保护词跳过:この/やっと/ので/まで…)
       while (s.length > 1 && !JA_PROTECTED.has(s) && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
       // ③ 末尾 で
@@ -222,6 +230,9 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         if (w.sourceSpan) continue;
         if (kind === "前后" && ["前", "之前", "以前", "后", "之后", "以后"].includes(w.chinese) &&
             sourceText.includes(span)) { w.sourceSpan = span; break; }
+        if (kind === "前后" && ["以后", "之后", "后"].includes(w.chinese) && sourceText.includes(span)) {
+          w.sourceSpan = span; break;
+        }
         if (kind === "名词" && w.partOfSpeech === "noun" && sourceText.includes(span)) {
           w.sourceSpan = span; break;
         }
@@ -328,6 +339,11 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         }
         w.sourceSpan = "";
       }
+      // got + 过去分词整体:结婚了←got married(不是只对齐 married)
+      if (w.partOfSpeech === "verb" && w.sourceSpan &&
+          sourceText.includes("got " + w.sourceSpan)) {
+        w.sourceSpan = "got " + w.sourceSpan;
+      }
       // 被动经历者:有人/人们/大家 不许认领 I/me/we(I was told → 有人←∅,我←I)
       if (["有人", "人们", "大家"].includes(w.chinese) && ["I", "me", "we", "We"].includes(w.sourceSpan)) {
         w.sourceSpan = "";
@@ -401,7 +417,7 @@ export function mountZhRoutes(app, deps) {
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.6", fixup: true }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.7", fixup: true }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
