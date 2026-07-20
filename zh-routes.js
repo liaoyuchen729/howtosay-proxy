@@ -413,11 +413,14 @@ const translateSchemaZh = {
 };
 
 export function mountZhRoutes(app, deps) {
-  const { openAIJSON, MODEL, DICT_MODEL, APP_SHARED_SECRET,
+  const { openAIJSON, MODEL: MODEL_BASE, DICT_MODEL, APP_SHARED_SECRET,
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
+  // 中文版可独立换模型:在 Railway 设 OPENAI_MODEL_ZH(如 gpt-4o)即可,
+  // 不影响英文版;不设则跟随英文版的 OPENAI_MODEL。词对齐细粒度拆分强模型明显更稳。
+  const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.7", fixup: true }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.8", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
