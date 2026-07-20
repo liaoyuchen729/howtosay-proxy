@@ -260,7 +260,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     // 教训(第1轮裁判):韩语词尾音节常与助词同形(사과/고양이/회의/제주도/같이),
     // 盲剥单字助词会剥断词。只做三件确定安全的事:
     // ① 代词+助词 → 只留代词(저는→저);② 双字助词剥离(에서/부터…);③ 系词后缀让给 是
-    const KO_COPULA = ["입니다", "이에요", "예요", "이야"];
+    const KO_COPULA = ["입니다", "이에요", "예요", "이야", "이세요"];
     const pendingKo = [];
     for (const w of ws) {
       let s = w.sourceSpan || "";
@@ -291,7 +291,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       // 单音节截断恢复:span 是 1 字且有以它开头的完整词 → 用完整词(剥尾助词)
       if (w.sourceSpan && w.sourceSpan.length === 1 && /[\uAC00-\uD7AF]/.test(w.sourceSpan)) {
         const full = koTokens.find(t => t.length > 1 && t.startsWith(w.sourceSpan));
-        if (full) {
+        if (full && !ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.length > 1 && full.includes(x.sourceSpan))) {
           let s = full;
           for (const suf of KO_TRAIL_2) if (s.length > suf.length && s.endsWith(suf)) { s = s.slice(0, -suf.length); break; }
           if (s.length > 2 && KO_TRAIL_1.has(s[s.length - 1])) s = s.slice(0, -1);
@@ -302,7 +302,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       // 两种形态:句首连接词(그리고 우리는 → 保留词头 그리고);
       //          从属词尾(시간이 없어서 → 保留词尾 없어서)
       const KO_CONNECTIVES = new Set(["그리고", "하지만", "그래서", "그런데", "그러나", "또는", "또"]);
-      const isConjChip = w.partOfSpeech === "conjunction" || /^(因为|如果|虽然|但是|所以|然后|而且|不过|那么)/.test(w.chinese);
+      const isConjChip = w.partOfSpeech === "conjunction" || /^(因为|如果|虽然|但是|所以|然后|而且|不过|那么|正在|在)$/.test(w.chinese) || /^(因为|如果|虽然|但是|所以|然后|而且|不过|那么)/.test(w.chinese);
       if (isConjChip && (w.sourceSpan || "").includes(" ")) {
         const parts = w.sourceSpan.split(/\s+/);
         const keepFirst = KO_CONNECTIVES.has(parts[0]);
@@ -317,6 +317,45 @@ function fixupZhAlignment(sourceText, words, srcLang) {
             ? ws.find(x => ZH_PRONOUNS.has(x.chinese) && !x.sourceSpan)
             : ws.find(x => ["noun", "adjective", "verb"].includes(x.partOfSpeech) && !x.sourceSpan);
           if (t && sourceText.includes(s)) t.sourceSpan = s;
+        }
+      }
+      // 功能词吞实词 → 只留语法词尾,词干转移给空实词块(如果←있으면 → 如果←으면 + 有…←있)
+      const KO_ENDINGS = [
+        [/^(如果|.*的话$)/, ["으면", "면"]],
+        [/^因为/, ["아서", "어서", "라서", "니까"]],
+        [/^(但是?|不过)$/, ["지만"]],
+        [/^在$/, ["에서", "에"]],
+      ];
+      if (w.sourceSpan && !w.sourceSpan.includes(" ")) {
+        for (const [re, ends] of KO_ENDINGS) {
+          if (!re.test(w.chinese)) continue;
+          const end = ends.find(e => w.sourceSpan.endsWith(e) && w.sourceSpan.length > e.length);
+          if (end) {
+            const stem = w.sourceSpan.slice(0, -end.length);
+            w.sourceSpan = end;
+            const t = ws.find(x => ["noun", "adjective", "verb"].includes(x.partOfSpeech) && !x.sourceSpan);
+            if (t && sourceText.includes(stem)) t.sourceSpan = stem;
+          }
+          break;
+        }
+      }
+      // 情态词(会/能/可以)不许吞整个动词:span 无「수」→ 让给空动词块,自己 ∅
+      if (["会", "能", "可以"].includes(w.chinese) && w.sourceSpan &&
+          !w.sourceSpan.includes("수") && /[\uAC00-\uD7AF]/.test(w.sourceSpan)) {
+        const t = ws.find(x => x.partOfSpeech === "verb" && !x.sourceSpan);
+        if (t) { t.sourceSpan = w.sourceSpan; w.sourceSpan = ""; }
+        else w.sourceSpan = "";
+      }
+      // 数量块守卫:span 必须含数字/韩语数词/量词,否则是强凑(一个←새)
+      if (/^[一两三四五六七八九十百千0-9]/.test(w.chinese) && w.chinese.length <= 3 &&
+          !/[起样定直些下边共儿点分会]/.test(w.chinese) && w.sourceSpan &&
+          !/[0-9하한두세네다섯여섯일곱여덟아홉열스무서른마흔쉰백천만개명권마리잔병장분시]/.test(w.sourceSpan)) {
+        const dropped = w.sourceSpan;
+        w.sourceSpan = "";
+        // 새(新)被数量块抢走 → 还给 新X 块(新项目←새 프로젝트)
+        if (dropped === "새") {
+          const t = ws.find(x => /^新/.test(x.chinese) && x.sourceSpan && sourceText.includes("새 " + x.sourceSpan));
+          if (t) t.sourceSpan = "새 " + t.sourceSpan;
         }
       }
       // 显式主语:我←∅ 但原文有独立的 저는/저/나는/제가 → 补上
@@ -340,19 +379,24 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     Japanese: { "什么": ["何"], "谁": ["誰", "だれ"], "哪里": ["どこ"], "什么时候": ["いつ"],
       "为什么": ["なぜ", "どうして"], "怎么": ["どう"], "多少": ["いくら"], "几": ["何"] },
     Korean: { "什么": ["뭐", "무엇"], "谁": ["누구"], "哪里": ["어디"], "什么时候": ["언제"],
-      "为什么": ["왜"], "怎么": ["어떻게"], "多少": ["얼마"], "几": ["몇"], "是": ["입니다", "이에요", "예요"] },
+      "为什么": ["왜"], "怎么": ["어떻게"], "多少": ["얼마"], "几": ["몇"],
+      "是": ["입니다", "이에요", "예요", "이세요"], "下雨": ["비가 오", "비가 와"], "很重": ["무거워", "무거우"] },
     Vietnamese: { "什么": ["gì"], "谁": ["ai"], "哪里": ["đâu"], "什么时候": ["khi nào", "bao giờ"],
       "为什么": ["sao", "tại sao"], "怎么": ["thế nào"], "多少": ["bao nhiêu"], "几": ["mấy"],
-      "了": ["rồi", "đã"] },
+      "了": ["rồi", "đã"], "吗": ["chưa", "hả", "nhé", "à"],
+      "妹妹": ["Em gái", "em gái"], "父亲": ["Bố", "bố"], "新鲜": ["tươi"] },
     Thai: { "什么": ["อะไร"], "谁": ["ใคร"], "哪里": ["ที่ไหน"], "什么时候": ["เมื่อไหร่", "เมื่อไร"],
       "为什么": ["ทำไม"], "怎么": ["ยังไง", "อย่างไร"], "多少": ["เท่าไหร่", "เท่าไร"], "几": ["กี่"],
-      "了": ["แล้ว"] },
+      "了": ["แล้ว"], "很": ["มาก"], "六点": ["หกโมง"], "下雨": ["ฝนตก"] },
     Indonesian: { "什么": ["apa"], "谁": ["siapa"], "哪里": ["mana"], "什么时候": ["kapan"],
       "为什么": ["kenapa", "mengapa"], "怎么": ["bagaimana"], "多少": ["berapa"], "几": ["berapa"],
-      "已经": ["sudah", "telah"], "了": ["sudah"] },
+      "已经": ["sudah", "telah"], "了": ["sudah"], "这": ["ini"], "那": ["itu"],
+      "我的": ["saya"], "里": ["di"] },
     Spanish: { "什么": ["qué", "Qué"], "谁": ["quién"], "哪里": ["dónde", "Dónde"],
       "什么时候": ["cuándo", "Cuándo"], "为什么": ["por qué"], "怎么": ["cómo", "Cómo"],
-      "多少": ["cuánto", "Cuánto", "cuánta"], "有": ["hay", "Hay", "había", "Había"] }
+      "多少": ["cuánto", "Cuánto", "cuánta"], "有": ["hay", "Hay", "había", "Había"],
+      "比": ["que"], "很": ["muy", "mucho"], "一点": ["nada"], "他": ["él", "lo"],
+      "在": ["en", "a"], "洗澡": ["me ducho", "ducho"] }
   };
   const qmap = QMAPS[srcLang];
   if (qmap) {
@@ -419,6 +463,21 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         const joined = parts.join(" ");
         if (joined !== w.sourceSpan && sourceText.includes(joined)) w.sourceSpan = joined;
       }
+      // 时间块吞点钟(明天早上←Tám giờ sáng mai)→ X giờ 让给空的 N点 块
+      if (!/点/.test(w.chinese) && w.sourceSpan) {
+        const m = w.sourceSpan.match(/^(\S+\s+giờ)\s+(.+)$/);
+        if (m) {
+          const t = ws.find(x => /点$/.test(x.chinese) && !x.sourceSpan);
+          if (t && sourceText.includes(m[1]) && sourceText.includes(m[2])) {
+            t.sourceSpan = m[1]; w.sourceSpan = m[2];
+          }
+        }
+      }
+      // 没V/不V 复合块:span 缺否定词但原文有 không+span 相邻 → 补上
+      if (/^[没不]./.test(w.chinese) && w.sourceSpan && !/không/i.test(w.sourceSpan) &&
+          sourceText.includes("không " + w.sourceSpan)) {
+        w.sourceSpan = "không " + w.sourceSpan;
+      }
     }
   }
   if (srcLang === "Thai") {
@@ -426,8 +485,9 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     const CANON = {
       "比": ["กว่า"], "吗": ["ไหม", "มั้ย", "หรือเปล่า"], "了": ["แล้ว"],
       "在": ["กำลัง", "ที่", "อยู่"], "正在": ["กำลัง"], "会": ["จะ", "ได้"], "要": ["จะ", "อยาก"],
-      "不": ["ไม่"], "很": ["มาก"], "的": ["ที่", "ของ"], "是": ["คือ", "เป็น"], "都": ["ทุก"]
+      "不": ["ไม่"], "很": ["มาก"], "的": ["ของ"], "是": ["คือ", "เป็น"], "都": ["ทุก"]
     };
+    const pendingTh = [];
     const CLASSIFIERS = ["เล่ม","ตัว","คน","อัน","แก้ว","ขวด","คัน","ใบ","ลูก","เครื่อง","ชิ้น","จาน","ห้อง",
       "บาท","เซนติเมตร","กิโลกรัม","กิโล","นาที","ชั่วโมง","วัน","ปี","ครั้ง","ที่"];
     for (const w of ws) {
@@ -457,6 +517,17 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           w.sourceSpan = w.sourceSpan + "แล้ว";
         }
       }
+      // 定语的 强凑关系词 ที่ → ∅(硬性规则3)
+      if (w.chinese === "的" && w.sourceSpan === "ที่") w.sourceSpan = "";
+      // 疑问尾 ไหม 被别的块吞了(可以←ได้ไหม)→ 剥出来转移给空的 吗
+      if (w.chinese !== "吗" && /ไหม$/.test(w.sourceSpan || "") && w.sourceSpan.length > 3) {
+        pendingTh.push("ไหม");
+        w.sourceSpan = w.sourceSpan.slice(0, -3);
+      }
+    }
+    for (const p of pendingTh) {
+      const t = ws.find(x => x.chinese === "吗" && !x.sourceSpan);
+      if (t) t.sourceSpan = p;
     }
   }
   if (srcLang === "Indonesian") {
@@ -490,7 +561,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         if (/nya$/.test(w.sourceSpan) && w.sourceSpan.length > 3) {
           pendingId.push(w.sourceSpan.slice(0, -3));   // 词根
           w.sourceSpan = "nya";
-        } else if (!w.sourceSpan.includes("nya")) w.sourceSpan = "";
+        } else if (!w.sourceSpan.includes("nya") && !ID_PRON.includes(w.sourceSpan.toLowerCase())) w.sourceSpan = "";
       }
       // 名词带 -nya 后缀 → 剥掉(Rumahnya→Rumah)
       if (w.partOfSpeech === "noun" && /nya$/.test(w.sourceSpan || "") && w.sourceSpan.length > 4) {
@@ -501,6 +572,17 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         pendingId.push("kah");
         w.sourceSpan = w.sourceSpan.slice(0, -3);
       }
+      // 里/在 只该对齐 di:吞了词组 → 收缩,余词留给下面的未认领扫描
+      if (["里", "在", "上"].includes(w.chinese) && /^di\s+\S/i.test(w.sourceSpan || "")) {
+        w.sourceSpan = w.sourceSpan.split(/\s+/)[0];
+      }
+      // 就 是中文添加的连接词,不许强凑 akan(akan 属于 会/将)
+      if (w.chinese === "就" && /^akan$/i.test(w.sourceSpan || "")) w.sourceSpan = "";
+      // 今年←tahun 漏了 ini → 补全 tahun ini(hari ini/malam ini 同理)
+      if (/^今|^现在$/.test(w.chinese) && w.sourceSpan && !/ ini$/i.test(w.sourceSpan) &&
+          sourceText.includes(w.sourceSpan + " ini")) {
+        w.sourceSpan = w.sourceSpan + " ini";
+      }
     }
     for (const root of pendingId) {
       const t = root === "kah"
@@ -508,15 +590,38 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         : ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
       if (t && sourceText.includes(root)) t.sourceSpan = root;
     }
+    // 未认领整词扫描:Rumahnya/Benarkah 这类完全没被认领的词 → 拆开分给空块
+    const ID_KAH_ROOTS = { "benar": "真", "bisa": "能", "boleh": "可", "ada": "有", "sudah": "已", "mau": "要", "perlu": "需" };
+    const idTokens = sourceText.split(/\s+/).map(t => t.replace(/[.,!?]/g, ""));
+    for (const tok of idTokens) {
+      const claimedTok = ws.some(x => x.sourceSpan && (x.sourceSpan.includes(tok) || tok.includes(x.sourceSpan)));
+      if (claimedTok) continue;
+      if (/nya$/i.test(tok) && tok.length >= 5) {
+        const root = tok.slice(0, -3);
+        const nChip = ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
+        if (nChip && sourceText.includes(root)) nChip.sourceSpan = root;
+        const pChip = ws.find(x => /^[他她它]们?的$/.test(x.chinese) && !x.sourceSpan);
+        if (pChip) pChip.sourceSpan = "nya";
+      } else if (/kah$/i.test(tok) && tok.length >= 5) {
+        const root = tok.slice(0, -3);
+        const zh = ID_KAH_ROOTS[root.toLowerCase()];
+        if (zh) {
+          const t = ws.find(x => x.chinese.startsWith(zh) && !x.sourceSpan);
+          if (t && sourceText.includes(root)) t.sourceSpan = root;
+        }
+        const q = ws.find(x => x.chinese === "吗" && !x.sourceSpan);
+        if (q) q.sourceSpan = "kah";
+      }
+    }
   }
   if (srcLang === "Spanish") {
     const ES_ART = ["el", "la", "los", "las", "El", "La", "Los", "Las"];
     const ES_POSS = { "mi": "我", "Mi": "我", "mis": "我", "tu": "你", "Tu": "你", "tus": "你",
                       "su": "他", "Su": "他", "sus": "他", "nuestra": "我们", "nuestro": "我们" };
-    const CANON = { "比": ["que"], "更": ["más"], "太": ["demasiado"], "很": ["muy"],
+    const CANON = { "比": ["que"], "更": ["más"], "太": ["demasiado"], "很": ["muy", "mucho"],
                     "是": ["es", "son", "soy", "eres", "somos", "era", "fue", "está", "están", "estoy"],
                     "了": ["ya"], "有": ["hay", "Hay", "había", "Había", "tiene", "tengo", "tienen"],
-                    "在": ["en", "está", "están", "estoy", "estás"],
+                    "在": ["en", "a", "está", "están", "estoy", "estás"],
                     "去": ["ir", "voy", "vas", "va", "vamos", "van", "fui", "fue", "iré"] };
     const pendingEs = [];
     for (const w of ws) {
@@ -535,6 +640,26 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       w.sourceSpan = (s && sourceText.includes(s)) ? s : (w.sourceSpan && sourceText.includes(w.sourceSpan) ? w.sourceSpan : "");
       if (s && sourceText.includes(s)) w.sourceSpan = s;
       if (CANON[w.chinese]) canonicalize(w, CANON[w.chinese], true);
+      // 一X 已吞多词(una película):有空名词块 → 收缩到冠词,名词还给空块
+      const mUn = (w.sourceSpan || "").match(/^(un|una|Un|Una)\s+(\S+)$/);
+      if (/^一/.test(w.chinese) && mUn) {
+        const i0 = ws.indexOf(w);
+        const nn = ws.slice(i0 + 1, i0 + 3).find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
+        if (nn) { nn.sourceSpan = mUn[2].replace(/[.,!?]/g, ""); w.sourceSpan = mUn[1]; }
+      }
+      // 指示词吞系词(这←Este es)→ 只留指示词,es 让给空的 是
+      if (/^[这那]/.test(w.chinese) && / /.test(w.sourceSpan || "")) {
+        const parts = w.sourceSpan.split(/\s+/);
+        if (/^(Este|Esta|Ese|Esa|Esto|Eso|Aquel|este|esta|ese|esa)$/.test(parts[0])) {
+          const dropped = parts.slice(1);
+          w.sourceSpan = parts[0];
+          const cop = dropped.find(d => ["es", "son", "está", "están", "era", "fue"].includes(d.replace(/[.,!?]/g, "")));
+          if (cop) {
+            const t = ws.find(x => x.chinese === "是" && !x.sourceSpan);
+            if (t) t.sourceSpan = cop.replace(/[.,!?]/g, "");
+          }
+        }
+      }
       // 一X ← un/una:后面名词给谁?有独立空名词块就给它;没有才并入 一X
       if (/^一/.test(w.chinese) && ["un", "una", "Un", "Una"].includes(w.sourceSpan)) {
         const pos = sourceText.indexOf(w.sourceSpan);
@@ -542,8 +667,9 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         if (rest) {
           const i = ws.indexOf(w);
           const nextNoun = ws.slice(i + 1, i + 3).find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
+          const takenElsewhere = ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.split(/\s+/).includes(rest[1]));
           if (nextNoun) nextNoun.sourceSpan = rest[1];
-          else w.sourceSpan = w.sourceSpan + " " + rest[1];
+          else if (!takenElsewhere) w.sourceSpan = w.sourceSpan + " " + rest[1];
         }
       }
       // 物主合并块(我家/你妈妈):span 缺 mi/tu/su 前缀 → 补上(mi casa)
@@ -576,6 +702,11 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   // ⑤a 标点块
   for (const w of ws) {
     if (PUNCT_RE.test(w.chinese) && w.sourceSpan && !PUNCT_RE.test(w.sourceSpan)) w.sourceSpan = "";
+    // 非标点块不许带走首尾标点(Maaf, → Maaf),标点留给标点块认领
+    if (!PUNCT_RE.test(w.chinese) && w.sourceSpan && w.sourceSpan.length > 1) {
+      const t = w.sourceSpan.replace(/[.,!?;:。、!?]+$/, "").replace(/^[¿¡«"']+/, "");
+      if (t) w.sourceSpan = t;
+    }
   }
   // ③ 相邻同 span 合并(链式:不+会+说 都←話せません → 不会说)
   const m1 = [];
@@ -664,6 +795,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   // 拉丁字母语言按「词边界」找位置:防止 he 匹配进 w[he]re
   const LATIN_BOUNDARY = ["English", "Spanish", "Vietnamese", "Indonesian"].includes(srcLang);
   const isLetter = ch => ch !== undefined && /\p{L}/u.test(ch);
+  const ID_SUFFIX = /^(nya|kah|lah|ku|mu)$/i;
   function findSpan(s, fromIdx) {
     let idx = fromIdx;
     const wordLike = LATIN_BOUNDARY && /\p{L}/u.test(s[0]) && /\p{L}/u.test(s[s.length - 1]);
@@ -672,7 +804,15 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       if (p === -1) return -1;
       if (!wordLike) return p;
       const before = sourceText[p - 1], after = sourceText[p + s.length];
-      if (!isLetter(before) && !isLetter(after)) return p;
+      // 印尼语黏着词缀:nya/kah 作 span 时允许词内后缀位;词根后紧跟词缀时允许右界是字母
+      let beforeOK = !isLetter(before);
+      let afterOK = !isLetter(after);
+      if (srcLang === "Indonesian") {
+        const rest = sourceText.slice(p + s.length);
+        if (!beforeOK && ID_SUFFIX.test(s) && afterOK) beforeOK = true;
+        if (!afterOK && /^(nya|kah|lah)(?!\p{L})/iu.test(rest)) afterOK = true;
+      }
+      if (beforeOK && afterOK) return p;
       idx = p + 1;
     }
   }
@@ -687,6 +827,21 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       const overlaps = claimed.some(([a, b]) => p < b && p + s.length > a);
       if (!overlaps) { claimed.push([p, p + s.length]); placed = true; break; }
       idx = p + 1;
+    }
+    // 多词 span 冲突收缩:「đã đọc」的 đã 已被 已经 认领 → 收缩为 đọc,而不是整个清空
+    if (!placed && /\s/.test(s)) {
+      const parts = s.split(/\s+/).filter(x => x && !PUNCT_RE.test(x)).sort((a, b) => b.length - a.length);
+      for (const cand of parts) {
+        let idx2 = 0;
+        while (true) {
+          const p = findSpan(cand, idx2);
+          if (p === -1) break;
+          const overlaps = claimed.some(([a, b]) => p < b && p + cand.length > a);
+          if (!overlaps) { claimed.push([p, p + cand.length]); w.sourceSpan = cand; placed = true; break; }
+          idx2 = p + 1;
+        }
+        if (placed) break;
+      }
     }
     if (!placed) w.sourceSpan = "";
   }
@@ -750,7 +905,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.2", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.3", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
