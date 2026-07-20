@@ -180,7 +180,10 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         s = s.replace(/あとで?$/, "");
       }
       // ② 剥尾助词(保护词跳过:この/やっと/ので/まで…)
-      while (s.length > 1 && !JA_PROTECTED.has(s) && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
+      while (s.length > 1 && !JA_PROTECTED.has(s) && JA_TRAIL_PARTICLES.has(s[s.length - 1])
+             && !(s[s.length - 1] === "と" && s[s.length - 2] === "こ")   // こと 的 と 是词内,不剥
+             && !(s[s.length - 1] === "の" && s[s.length - 2] === "も")   // もの 同理
+            ) s = s.slice(0, -1);
       // ③ 末尾 で
       if (s.length > 1 && s.endsWith("で") && !JA_PROTECTED.has(s)) {
         if (["在", "坐", "用"].includes(w.chinese)) s = "で";
@@ -189,6 +192,17 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       // ④ 末尾 たら 条件形(让给 如果;动词保留到 た)
       if (s.length > 2 && s.endsWith("たら") && !["如果", "要是", "的话"].includes(w.chinese)) s = s.slice(0, -1);
       w.sourceSpan = (s && sourceText.includes(s)) ? s : "";
+      // ④b 是:中文补出的系动词。日语只有 だ/です/である 是真系动词;
+      //     抓到孤零零的 で(であれ/です 的片段)或其它非系动词 → ∅
+      if (w.chinese === "是" && w.sourceSpan &&
+          !["だ", "です", "である", "だった", "でした"].includes(w.sourceSpan)) {
+        w.sourceSpan = "";
+      }
+      // ④c 代词 + のこと / のもの:あなたのこと=你,只保留代词本体
+      if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan) {
+        const pm = w.sourceSpan.match(/^(あなた|わたし|私|僕|俺|君|彼女|彼|我々|皆)/);
+        if (pm && w.sourceSpan.length > pm[1].length) w.sourceSpan = pm[1];
+      }
       // ⑤ 在:日语里只许对齐 で;认领了 の前 这类 → 把 前/後 转移给对应块后清空
       if (w.chinese === "在" && w.sourceSpan && w.sourceSpan !== "で") {
         if (w.sourceSpan.includes("前")) pendingTransfers.push(["前后", "前"]);
@@ -420,7 +434,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.8", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.9", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
