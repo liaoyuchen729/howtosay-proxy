@@ -80,7 +80,10 @@ function systemPromptZh(srcLang, script) {
     `Never paraphrase, translate, normalize, or invent text that is not literally in the input.\n` +
     `    B. Align by MEANING, not position. Map each Chinese unit to the SHORTEST source substring carrying that meaning.\n` +
     `    C. "" (no counterpart) is NORMAL and CORRECT — never force a match. In particular:\n` +
-    `       · ${srcLang === "Japanese" ? "Japanese usually OMITS the subject: added 我/你/我们 → \"\" unless 私/あなた/彼 etc. is literally present. NEVER align 我 to an unrelated word." : "Added pronouns/particles with no counterpart → \"\"."}\n` +
+    `       · ${srcLang === "Japanese" ? "Japanese usually OMITS the subject: added 我/你/我们 → \"\" unless 私/あなた/彼 etc. is literally present. NEVER align 我 to an unrelated word."
+              : srcLang === "Korean" ? "Korean often omits the subject: added 我/你 → \"\" unless 저/나/당신 etc. is present. Strip particles 은/는/이/가/을/를/에서 from spans (저는→저)."
+              : srcLang === "Spanish" ? "Spanish drops subject pronouns (hablo = 我说): added 我/你/他 → \"\" unless yo/tú/él etc. is literally present — never align a pronoun to a conjugated verb."
+              : "Added pronouns/particles with no counterpart → \"\"."}\n` +
     `       · Chinese-added words → "": structural 的/地/得 (relative-clause 的, adverbial 地), added 都/也/就/还, ` +
     `added coverb 在 when the localizer 上/里 already claims the source preposition, added nouns like 钱 in 多少钱←how much.\n` +
     `    D. Each source substring may be claimed by AT MOST ONE unit — never let two units share a span. ` +
@@ -113,6 +116,12 @@ function systemPromptZh(srcLang, script) {
 // ⑤ 标点块不许认领文字;全局去重(同一 span 只能被认领一次,后者清空)
 const JA_TRAIL_PARTICLES = new Set(["は","が","を","に","へ","と","も","の","や","ね","よ"]);
 const JA_PRONOUNS = ["私","僕","俺","あなた","君","彼女","彼","我々","皆"];
+// 韩语:结构与日语同款(用户日语标注结论迁移)
+const KO_TRAIL_1 = new Set(["은","는","이","가","을","를","에","의","도","와","과","로"]);
+const KO_TRAIL_2 = ["에서","으로","부터","까지","에게","한테","하고","이랑","보다"];
+const KO_PRONOUNS = ["저","나","너","당신","그녀","그","우리","저희","제","내"];
+// 西班牙语:省主语(hablo=我说)→ 中文补出的代词不许认领动词变位
+const ES_PRONOUNS = ["yo","tú","tu","usted","él","ella","nosotros","nosotras","ustedes","ellos","ellas","vos"];
 const ZH_PRONOUNS = new Set(["我","你","您","我们","你们","他","她","它","他们","她们","咱们"]);
 const NUM_DEM_CHARS = new Set("一二三四五六七八九十百千万两几半这那哪每");
 const PUNCT_RE = /^[，。？！、,.?!:;:;…\s]+$/;
@@ -147,6 +156,33 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan &&
           !JA_PRONOUNS.some(p => w.sourceSpan.includes(p))) {
         w.sourceSpan = "";
+      }
+    }
+  }
+  if (srcLang === "Korean") {
+    for (const w of ws) {
+      let s = w.sourceSpan || "";
+      let changed = true;
+      while (changed && s.length > 1) {
+        changed = false;
+        for (const suf of KO_TRAIL_2) {
+          if (s.length > suf.length && s.endsWith(suf)) { s = s.slice(0, -suf.length); changed = true; }
+        }
+        if (s.length > 1 && KO_TRAIL_1.has(s[s.length - 1])) { s = s.slice(0, -1); changed = true; }
+      }
+      if (s !== w.sourceSpan) w.sourceSpan = (s && sourceText.includes(s)) ? s : "";
+      if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan &&
+          !KO_PRONOUNS.some(p => w.sourceSpan.includes(p))) {
+        w.sourceSpan = "";
+      }
+    }
+  }
+  if (srcLang === "Spanish") {
+    // 省主语:中文代词只许认领真实的西语代词,不许认领动词变位
+    for (const w of ws) {
+      if (ZH_PRONOUNS.has(w.chinese) && w.sourceSpan) {
+        const lower = w.sourceSpan.toLowerCase();
+        if (!ES_PRONOUNS.some(p => lower === p || lower.startsWith(p + " "))) w.sourceSpan = "";
       }
     }
   }
@@ -282,7 +318,7 @@ export function mountZhRoutes(app, deps) {
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.3", fixup: true }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.4", fixup: true }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
