@@ -93,6 +93,25 @@ function systemPromptZh(srcLang, script) {
     `       · 吗 ← ${srcLang === "Japanese" ? "か;  吧 ← ましょう/ませんか;  既…又 ← …し…し;  如果 ← たら/れば (just the conditional ending, e.g. 如果←たら NOT いらっしゃったら);  即使 ← ても/であれ" : "the question auxiliary do/did only if nothing else fits, else \"\";  吧 ← let's"}.\n` +
     `       · locative/instrumental: 在 ← ${srcLang === "Japanese" ? "で (locative particle)" : "in/at"}, 上 ← on, 里 ← in;  坐 ← ${srcLang === "Japanese" ? "instrumental で or \"\"" : "by"};  被 ← by (passive agent);  把 ← "".\n` +
     `       · ${srcLang === "Japanese" ? "compound verbs SPLIT: 持って行って → 带←持って + 去←行って;  たい→想;  strip particles は/が/を/に/も/の from spans (彼→他 NOT 彼は)" : "verb inflections: align the inflected form (去←goes is fine), but each form only once"}.\n` +
+    `    F. Splitting & collocation rules (from human annotation):\n` +
+    `       · X的Y ALWAYS splits: X + 的("") + Y — never glue 的 into either side (except pronoun possessive 我的). 一只狗 + 的 + 形状, 桌子 + 上 + 的 + 书 (上←on, 的←"").\n` +
+    `${srcLang === "English"
+        ? "       · verb+preposition collocations align WHOLE: 等←waiting for, 找←look for, 听←listen to;  fixed phrases whole: 结婚了←got married, 休息一下←take a rest, 看一看←have a look.\n" +
+          "       · phrasal verb splits from its complement when Chinese splits: 拖←put off + 到←until;  拿←took + 出去←out;  放←bring + 回去←back;  还←pay + 我←me (back→\"\").\n" +
+          "       · 一X ← \"a X\": the article a carries 一 (一周←a week, 一杯←a cup);  每个←Each + 学生←student (never swallow the noun).\n" +
+          "       · time PPs align to the time word alone: 早上←in the morning (added 再/就 → \"\");  前←before, 后←after (在 → \"\").\n" +
+          "       · quantifier chains distribute: 有些人←Some + 中←of + 他们←them;  百分之五十←50 percent + 学生←the students.\n" +
+          "       · 请←please (not the whole Could you please);  黑←dark (天 → \"\");  哪里←where even inside embedded clauses.\n"
+        : srcLang === "Japanese"
+        ? "       · この/その/あの/どの ← the WHOLE demonstrative (这个←この, never こ);  やっと/ちょっと/ずっと/たまに/ので/のに/まで/までに are single words — never split them.\n" +
+          "       · て-form chains split: 作って←做(了) + くれた←给;  持って←带 + 行って←去;  買って←买了 + みた←试试(看);  てみない?: 试试←み + 要不要←ない?.\n" +
+          "       · conditional endings: 如果←ば/れば/たら/なら (adjective stem stays with the adjective: 便宜←安);  一…就/就←と or が;  ばいいのに ← 应该(吧) as ONE unit.\n" +
+          "       · causative/passive morphology splits: 让←させ + 被←られ (させられた);  书かせた: 让←せ, 写←書か.\n" +
+          "       · comparatives: 没有←ない + 那么←ほど + 热←暑く (昨日ほど暑くない);  一番←最.\n" +
+          "       · aspect/attitude endings: てしまった → translate as V完了/V掉了 (not bare V了) and align V完了←V てしまった;  てから/たあとで ← 以后/之后;  そう(evidential) ← 看起来/好像, stem stays with the adjective (おいし←好吃).\n" +
+          "       · adjectives must align: 冰←冷たい, 甜食←甘いもの, 新开←新しい;  onomatopoeia aligns to its Chinese adverb: 悠闲地←だらだら, 渐渐←だんだん, 流利←ぺらぺら.\n" +
+          "       · たり lists: each verb aligns to its stem+たり (读书←読んだり, 听音乐←聴いたり).\n"
+        : ""}` +
     `    Worked examples (${srcLang} → Chinese):\n` +
     `${srcLang === "Japanese"
         ? "      彼は日本語が話せます → 他(彼) + 会说(話せます,ONE unit) + 日语(日本語)\n" +
@@ -115,6 +134,10 @@ function systemPromptZh(srcLang, script) {
 // ④ 数词/指示词+量词 合并(三+本→三本);动词+了/过 合并(买+了→买了);代词+的 合并(我+的→我的)
 // ⑤ 标点块不许认领文字;全局去重(同一 span 只能被认领一次,后者清空)
 const JA_TRAIL_PARTICLES = new Set(["は","が","を","に","へ","と","も","の","や","ね","よ"]);
+// 词汇词/固定搭配:结尾字符碰巧像助词,但绝不能剥(この≠こ+の,やっと≠やっ+と)
+const JA_PROTECTED = new Set(["この","その","あの","どの","ここ","そこ","あそこ","どこ","どんな",
+  "まで","までに","ので","のに","こと","もの","やっと","ちょっと","もっと","ずっと","きっと",
+  "たまに","すでに","つい","ほど","ながら","かな","そう","みたい","らしい","ばいいのに"]);
 const JA_PRONOUNS = ["私","僕","俺","あなた","君","彼女","彼","我々","皆"];
 // 韩语:结构与日语同款(用户日语标注结论迁移)
 const KO_TRAIL_1 = new Set(["은","는","이","가","을","를","에","의","도","와","과","로"]);
@@ -138,12 +161,12 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   if (srcLang === "Japanese") {
     for (const w of ws) {
       let s = w.sourceSpan || "";
-      while (s.length > 1 && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
+      while (s.length > 1 && !JA_PROTECTED.has(s) && JA_TRAIL_PARTICLES.has(s[s.length - 1])) s = s.slice(0, -1);
       // 末尾 で:
       // · 在/坐/用(介引作用)→ 收缩到只认 で 本身(ここで→で,由 这里 认领 ここ)
       // · て形动词(飲んで/泳いで:ん/い+で)→ 保留,で 是动词的一部分
       // · 其他(名词+locative/copula で,如 雨で)→ 剥掉
-      if (s.length > 1 && s.endsWith("で")) {
+      if (s.length > 1 && s.endsWith("で") && !JA_PROTECTED.has(s)) {
         if (["在", "坐", "用"].includes(w.chinese)) s = "で";
         else if (!(s.length > 1 && (s[s.length - 2] === "ん" || s[s.length - 2] === "い"))) s = s.slice(0, -1);
       }
@@ -157,6 +180,22 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           !JA_PRONOUNS.some(p => w.sourceSpan.includes(p))) {
         w.sourceSpan = "";
       }
+      // 指示词守卫:这个/那家/这本… 只许对齐 この/その/あの/どの(整体);
+      // 认领了更长的(那家←新しいラーメン屋)→ 收缩到指示词本体或清空
+      if (/^[这那這]/.test(w.chinese) && w.sourceSpan) {
+        const dem = ["この", "その", "あの", "どの"].find(d => w.sourceSpan.startsWith(d));
+        if (dem) w.sourceSpan = dem;
+        else if (!["この","その","あの","どの"].includes(w.sourceSpan)) w.sourceSpan = "";
+      }
+      // 单字能愿/虚词块(会/要/想…)不许认领日语汉字实词(会←会議 之类)
+      if (w.chinese.length === 1 && ["auxiliary", "particle", "adverb"].includes(w.partOfSpeech) &&
+          w.sourceSpan && w.sourceSpan.length >= 2 && /[\u4E00-\u9FFF]/.test(w.sourceSpan)) {
+        w.sourceSpan = "";
+      }
+      // 连词收缩:因为←…ので → ので;但/可是←…が → が;虽然←…のに → のに
+      if (["因为"].includes(w.chinese) && w.sourceSpan.length > 2 && w.sourceSpan.endsWith("ので")) w.sourceSpan = "ので";
+      if (["但", "但是", "可是", "不过"].includes(w.chinese) && w.sourceSpan.length > 1 && w.sourceSpan.endsWith("が")) w.sourceSpan = "が";
+      if (["虽然", "尽管"].includes(w.chinese) && w.sourceSpan.length > 2 && w.sourceSpan.endsWith("のに")) w.sourceSpan = "のに";
     }
   }
   if (srcLang === "Korean") {
@@ -194,7 +233,8 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   const m1 = [];
   for (const w of ws) {
     const prev = m1[m1.length - 1];
-    if (prev && w.sourceSpan && prev.sourceSpan === w.sourceSpan && !PUNCT_RE.test(w.chinese)) {
+    if (prev && w.sourceSpan && prev.sourceSpan === w.sourceSpan && !PUNCT_RE.test(w.chinese) &&
+        !(["的", "地", "得"].includes(w.chinese) && prev.partOfSpeech !== "pronoun")) {
       prev.chinese += w.chinese;
       prev.pinyin = [prev.pinyin, w.pinyin].filter(Boolean).join(" ");
       prev.isGrammarStructure = prev.isGrammarStructure && w.isGrammarStructure;
@@ -248,6 +288,19 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       }
       if (["坐", "骑", "开", "乘"].includes(w.chinese) && GO_FORMS.test(w.sourceSpan) && /\bby\b/.test(sourceText)) {
         w.sourceSpan = "by";
+      }
+      // before/after 对齐到 前/后,不是 在/趁:在←before → 转移给后面的 前/之前/后/之后
+      if (["在", "趁"].includes(w.chinese) && ["before", "Before", "after", "After"].includes(w.sourceSpan)) {
+        for (let j = 0; j < m2.length; j++) {
+          if (["前", "之前", "以前", "后", "之后", "以后"].includes(m2[j].chinese) && !m2[j].sourceSpan) {
+            m2[j].sourceSpan = w.sourceSpan; break;
+          }
+        }
+        w.sourceSpan = "";
+      }
+      // 被动经历者:有人/人们/大家 不许认领 I/me/we(I was told → 有人←∅,我←I)
+      if (["有人", "人们", "大家"].includes(w.chinese) && ["I", "me", "we", "We"].includes(w.sourceSpan)) {
+        w.sourceSpan = "";
       }
     }
   }
@@ -318,7 +371,7 @@ export function mountZhRoutes(app, deps) {
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.4", fixup: true }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v2.5", fixup: true }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
