@@ -300,6 +300,11 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           .find(p => sourceText.includes(p) && !ws.some(x => x !== w && x.sourceSpan === p));
         if (cand) w.sourceSpan = cand;
       }
+      // ⑦0 截断恢复:span 是 こ/そ/あ 单字且原文有 この/その/あの/これ → 恢复
+      if (/^[こそあ]$/.test(w.sourceSpan || "")) {
+        const full = ["この", "その", "あの", "これ", "それ", "あれ"].find(d => d[0] === w.sourceSpan && sourceText.includes(d));
+        if (full) w.sourceSpan = full;
+      }
       // ⑦ 指示词守卫(那家←新しいラーメン屋 → ∅;这个←この漢字 → この)
       if (DEM_CHIP.test(w.chinese) && w.sourceSpan) {
         const dem = DEMS.find(d => w.sourceSpan.startsWith(d));
@@ -638,6 +643,15 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           sourceText.includes("không " + w.sourceSpan)) {
         w.sourceSpan = "không " + w.sourceSpan;
       }
+      // 的←của 补空
+      if (w.chinese === "的" && !w.sourceSpan && /\bcủa\b/.test(sourceText) &&
+          !ws.some(x => x.sourceSpan === "của")) w.sourceSpan = "của";
+      // nên = 所以/因此(结果连词),不是 因为:因为←nên → 转移给 所以
+      if (w.chinese === "因为" && /^nên$/i.test(w.sourceSpan || "")) {
+        const t = ws.find(x => x.chinese === "所以" && !x.sourceSpan);
+        if (t) t.sourceSpan = w.sourceSpan;
+        w.sourceSpan = "";
+      }
     }
   }
   if (srcLang === "Thai") {
@@ -807,15 +821,23 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     const ID_KAH_ROOTS = { "benar": "真", "bisa": "能", "boleh": "可", "ada": "有", "sudah": "已", "mau": "要", "perlu": "需" };
     const idTokens = sourceText.split(/\s+/).map(t => t.replace(/[.,!?]/g, ""));
     for (const tok of idTokens) {
-      const claimedTok = ws.some(x => x.sourceSpan && (x.sourceSpan.includes(tok) || tok.includes(x.sourceSpan)));
-      if (claimedTok) continue;
+      // nya 后缀:词根、后缀独立分配(词根 kamar 已被 房间 认领时,他的←nya 仍要补)
       if (/nya$/i.test(tok) && tok.length >= 5) {
         const root = tok.slice(0, -3);
-        const nChip = ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
-        if (nChip && sourceText.includes(root)) nChip.sourceSpan = root;
-        const pChip = ws.find(x => /^[他她它]们?的$/.test(x.chinese) && !x.sourceSpan);
-        if (pChip) pChip.sourceSpan = "nya";
-      } else if (/kah$/i.test(tok) && tok.length >= 5) {
+        const rootClaimed = ws.some(x => x.sourceSpan && (x.sourceSpan.includes(root) || root.includes(x.sourceSpan)));
+        if (!rootClaimed) {
+          const nChip = ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
+          if (nChip && sourceText.includes(root)) nChip.sourceSpan = root;
+        }
+        if (!ws.some(x => x.sourceSpan === "nya")) {
+          const pChip = ws.find(x => /^[他她它]们?的$/.test(x.chinese) && !x.sourceSpan);
+          if (pChip) pChip.sourceSpan = "nya";
+        }
+        continue;
+      }
+      const claimedTok = ws.some(x => x.sourceSpan && (x.sourceSpan.includes(tok) || tok.includes(x.sourceSpan)));
+      if (claimedTok) continue;
+      if (/kah$/i.test(tok) && tok.length >= 5) {
         const root = tok.slice(0, -3);
         const zh = ID_KAH_ROOTS[root.toLowerCase()];
         if (zh) {
@@ -930,6 +952,14 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     for (const [zh, span] of pendingEs) {
       const t = ws.find(x => (x.chinese === zh || x.chinese === zh + "的") && !x.sourceSpan);
       if (t && sourceText.includes(span)) t.sourceSpan = span;
+    }
+    // 独立与格/宾格 me(Se me olvidaron…):我 空着且原文有独立 me 词 → 补
+    // (附着式 Dame/ayudarme 的 me 是词内子串,过不了拉丁词边界,不拆)
+    for (const w of ws) {
+      if (w.chinese === "我" && !w.sourceSpan) {
+        const m = sourceText.match(/(?<![A-Za-zÁÉÍÓÚáéíóúñü])[Mm]e(?![A-Za-zÁÉÍÓÚáéíóúñü])/);
+        if (m && !ws.some(x => x.sourceSpan === m[0])) w.sourceSpan = m[0];
+      }
     }
   }
   // 语言块清完强凑 span 后,第二次 QMAP 补空(很←Hace 被清 → 补 mucho)
@@ -1089,12 +1119,19 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     let idx = fromIdx;
     const wordLike = LATIN_BOUNDARY && /\p{L}/u.test(s[0]) && /\p{L}/u.test(s[s.length - 1]);
     const jaShi = srcLang === "Japanese" && s === "し";  // 并列助词 し 只认子句连接位
+    const jaDe = srcLang === "Japanese" && s === "で";  // 格助词 で 只认名词后(排除 遊んで 的 て形)
     while (true) {
       const p = sourceText.indexOf(s, idx);
       if (p === -1) return -1;
       if (jaShi) {
         const nx = sourceText[p + 1];
         if (nx !== undefined && !/[、。,.\s]/.test(nx)) { idx = p + 1; continue; }
+        return p;
+      }
+      if (jaDe) {
+        const pv = sourceText[p - 1];
+        // 前字须是汉字或片假名(名词末尾);ん/い/hiragana 前 → て形 で,跳过
+        if (pv !== undefined && !/[\u4E00-\u9FFF\u30A0-\u30FF]/.test(pv)) { idx = p + 1; continue; }
         return p;
       }
       if (!wordLike) return p;
@@ -1200,7 +1237,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.8", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.9", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
