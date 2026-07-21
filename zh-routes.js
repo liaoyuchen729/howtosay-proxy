@@ -154,6 +154,33 @@ const PUNCT_RE = /^[，。？！、,.?!:;:;…\s]+$/;
 
 function fixupZhAlignment(sourceText, words, srcLang) {
   for (const w of words) if (typeof w.sourceSpan === "string") w.sourceSpan = w.sourceSpan.trim();
+  // ——— 通用:X的/X得/X地 复合块拆分(rubric:定语的/状语地/补语得 必拆,助词块 ∅)———
+  // 黑名单:得字动词(觉得…)、地字名词(土地…)、的字固定词(真的…)、代词+的(我的←mine 保留)
+  const DE_VERB = new Set(["觉得","记得","懂得","值得","显得","免得","省得","舍得","晓得","难得","懒得",
+    "使得","害得","乐得","恨不得","巴不得","怪不得","来得及","来不及","由得","怨不得","认得","晓不得","见得","算得"]);
+  const DI_NOUN = new Set(["土地","场地","基地","当地","本地","外地","各地","内地","产地","耕地","空地","草地",
+    "墓地","高地","洼地","盆地","绿地","圣地","腹地","工地","园地","阵地","领地","目的地","所在地","发源地",
+    "根据地","殖民地","ราชอาณาจักร","天地","阴天地","余地","境地","质地","心地","实地","当地"]);
+  const DE_FIXED = new Set(["真的","好的","是的","有的","别的","似的","假的","对的","错的","目的","的确","打的",
+    "挺好的","我的","你的","他的","她的","它的","我们的","你们的","他们的","她们的","咱们的","大家的","谁的","这的","那的"]);
+  const PRON_STEM = /^(我|你|您|他|她|它|咱|大家|这|那|谁|人家|自己|彼此)们?$/;
+  const splitDe = [];
+  for (const w of words) {
+    const m = w.chinese.match(/^(.+?)([的得地])$/);
+    if (!m || w.chinese.length < 2) { splitDe.push(w); continue; }
+    const [ , stem, de ] = m;
+    if (PRON_STEM.test(stem) || DE_FIXED.has(w.chinese) ||
+        (de === "得" && DE_VERB.has(w.chinese)) ||
+        (de === "地" && DI_NOUN.has(w.chinese))) { splitDe.push(w); continue; }
+    const pys = (w.pinyin || "").split(/\s+/);
+    splitDe.push(
+      { chinese: stem, partOfSpeech: w.partOfSpeech, sourceSpan: w.sourceSpan || "",
+        pinyin: pys.slice(0, stem.length).join(" "), isGrammarStructure: false },
+      { chinese: de, partOfSpeech: "particle", sourceSpan: "",
+        pinyin: pys.slice(stem.length).join(" ") || (de === "的" ? "de" : de === "得" ? "de" : "de"),
+        isGrammarStructure: true });
+  }
+  words = splitDe;
   if (!Array.isArray(words) || !words.length) return words;
   let ws = words.map(w => ({ ...w }));
 
@@ -512,6 +539,11 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           if (t && sourceText.includes(mDem[1])) t.sourceSpan = mDem[1];
         }
       }
+      // 这个/那个 ← 单独的 này/đó:若原文是「Cái/Con này」分类词短语 → 并入分类词
+      if (/^[这那]个$/.test(w.chinese) && /^(này|đó|kia|ấy)$/i.test(w.sourceSpan || "")) {
+        const m = sourceText.match(new RegExp("\\b(Cái|Con|Chiếc|cái|con|chiếc)\\s+" + w.sourceSpan, "i"));
+        if (m) w.sourceSpan = m[0];
+      }
       // 亲属词只认了性别词(妹妹←gái)→ 往前并入 em/anh/chị(Em gái)
       if (["gái", "trai"].includes((w.sourceSpan || "").toLowerCase())) {
         const pos = sourceText.indexOf(w.sourceSpan);
@@ -637,6 +669,13 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       if (["里", "在", "上"].includes(w.chinese) && /^di\s+\S/i.test(w.sourceSpan || "")) {
         w.sourceSpan = w.sourceSpan.split(/\s+/)[0];
       }
+      // apa kabar(你好吗)习语:你 是补出主语,不许认 apa
+      if (/^你$/.test(w.chinese) && /^apa$/i.test(w.sourceSpan || "") && /apa\s+kabar/i.test(sourceText)) w.sourceSpan = "";
+      // 公斤/斤 块认了 ini/itu 这类指示词 → 让给 se量词(sekilo)
+      if (/公斤|斤$/.test(w.chinese) && /^(ini|itu)$/i.test(w.sourceSpan || "")) {
+        const m = sourceText.match(/\bse(kilo|ons)\w*/i);
+        if (m) w.sourceSpan = m[0];
+      }
       // 就 是中文添加的连接词,必须 ∅;吞掉的 tidak 还给空的 不
       if (w.chinese === "就" && w.sourceSpan) {
         const mTidak = w.sourceSpan.match(/\btidak\b/i);
@@ -664,6 +703,14 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         ? ws.find(x => x.chinese === "吗" && !x.sourceSpan)
         : ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
       if (t && sourceText.includes(root)) t.sourceSpan = root;
+    }
+    // 里/在/上 空着但原文有独立 di 未被认领 → 补上
+    {
+      const diUsed = ws.some(x => /\bdi\b/i.test(x.sourceSpan || ""));
+      if (!diUsed && /(^|\s)di\s/i.test(sourceText)) {
+        const t = ws.find(x => ["里", "在", "上"].includes(x.chinese) && !x.sourceSpan);
+        if (t) t.sourceSpan = "di";
+      }
     }
     // se+量词 = 一X:sekilo/sebuah 未被认领 → 给空的 一X/X公斤 块
     for (const tok of sourceText.split(/\s+/).map(t => t.replace(/[.,!?]/g, ""))) {
@@ -855,6 +902,18 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       if (mArt && !/^[一这那這]/.test(w.chinese) && sourceText.includes(mArt[2])) w.sourceSpan = mArt[2];
       if (/^(the|The)$/.test(w.sourceSpan || "")) w.sourceSpan = "";
       if (/^(a|an|A|An)$/.test(w.sourceSpan || "") && !/^一/.test(w.chinese)) w.sourceSpan = "";
+      // 一杯/一双/一瓶… ← a:原文 "a <容器/量词> of" → 并入容器词(一杯←a cup)
+      if (/^一.{1,2}$/.test(w.chinese) && /^(a|an|A|An)$/.test(w.sourceSpan || "")) {
+        const pos = sourceText.indexOf(w.sourceSpan);
+        const rest = sourceText.slice(pos + w.sourceSpan.length).match(/^\s+([A-Za-z]+)\s+of\b/);
+        if (rest) w.sourceSpan = w.sourceSpan + " " + rest[1];
+      }
+      // 吗/呢/吧:英语无句末疑问助词(靠倒装),强凑 aux → ∅
+      if (["吗", "呢", "吧"].includes(w.chinese) && w.sourceSpan) w.sourceSpan = "";
+      // 已经=added already,不许认 be 动词(been/be/is/am/are)
+      if (w.chinese === "已经" && /^(been|be|is|am|are|Been|Be|Is|Am|Are)$/.test(w.sourceSpan || "")) w.sourceSpan = "";
+      // V不C 潜能式(不了/不下/不动…)不许认 to/the 类功能词
+      if (/^不[了下动完起来去到]/.test(w.chinese) && /^(to|the|a|an|of|for|To|The)$/.test(w.sourceSpan || "")) w.sourceSpan = "";
     }
   }
   const BE_FORMS = new Set(["was", "were", "is", "are", "be", "been", "Was", "Were", "Is", "Are"]);
@@ -1031,7 +1090,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.5", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.6", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
