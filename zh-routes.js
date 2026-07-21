@@ -163,6 +163,29 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   }
   // ② 日语专项
   if (srcLang === "Japanese") {
+    // VO 离合词拆分:中文动宾复合块整块吞/整块空时,拆成 动词+名词,名词对齐日语名词本体
+    const JA_VO = {
+      "交朋友": { v: "交", nJa: ["友達", "友だち", "ともだち"], vJa: ["作り", "作っ", "作ろ", "作る", "でき"] },
+      "吃饭":   { v: "吃", nJa: ["ご飯", "ごはん"], vJa: ["食べ"] },
+      "唱歌":   { v: "唱", nJa: ["歌"], vJa: ["歌い", "歌っ", "歌う"] },
+      "打电话": { v: "打", nJa: ["電話"], vJa: ["かけ", "し"] },
+      "看书":   { v: "看", nJa: ["本"], vJa: ["読み", "読ん", "読む"] },
+    };
+    for (let i = 0; i < ws.length; i++) {
+      const w = ws[i], vo = JA_VO[w.chinese];
+      if (!vo) continue;
+      const nSpan = vo.nJa.find(x => sourceText.includes(x));
+      if (!nSpan) continue;
+      const noun = w.chinese.slice(vo.v.length);
+      const pys = (w.pinyin || "").split(/\s+/);
+      const vSpan = vo.vJa.find(x => sourceText.includes(x)) || "";
+      ws.splice(i, 1,
+        { chinese: vo.v, partOfSpeech: "verb", sourceSpan: vSpan,
+          pinyin: pys.slice(0, vo.v.length).join(" "), isGrammarStructure: false },
+        { chinese: noun, partOfSpeech: "noun", sourceSpan: nSpan,
+          pinyin: pys.slice(vo.v.length).join(" "), isGrammarStructure: false });
+      i++;
+    }
     const DEMS = ["この", "その", "あの", "どの"];
     // 指示词+量词(这个/那家/那朵…),不含 这里/那里/这样/那么 等地点·方式词
     const DEM_CHIP = /^[这那這][个家本条只件张辆位杯瓶部台块朵份间棵颗支首场次页篇封双对]?$/u;
@@ -773,6 +796,14 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     if (n && w.partOfSpeech === "pronoun" && n.chinese === "的") {     // 我+的 → 我的
       m2.push(mergeUnits(w, n, "pronoun", sourceText)); i++; continue;
     }
+    // 日语愿望形:想←たい + 交←作り 且原文有连续的 作りたい → 想交←作りたい
+    if (srcLang === "Japanese" && n && ["想", "要"].includes(w.chinese) &&
+        /た[いく]$/.test(w.sourceSpan || "") && n.sourceSpan &&
+        sourceText.includes(n.sourceSpan + w.sourceSpan)) {
+      m2.push({ chinese: w.chinese + n.chinese, pinyin: [w.pinyin, n.pinyin].filter(Boolean).join(" "),
+                partOfSpeech: "verb", sourceSpan: n.sourceSpan + w.sourceSpan, isGrammarStructure: false });
+      i++; continue;
+    }
     m2.push(w);
   }
   // ⑥ 介词/标记转移(用户标注得出的确定性规则)
@@ -942,7 +973,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.4.1", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.4.2", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
