@@ -382,6 +382,16 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           if (t) t.sourceSpan = "새 " + t.sourceSpan;
         }
       }
+      // 量词 span 只认了 분/시간 等 → 往前找相邻的韩语数词并入(사십 분)
+      const KO_COUNTERS = new Set(["분", "시간", "개", "명", "권", "잔", "병", "마리", "장", "시", "번", "살"]);
+      if (w.sourceSpan && KO_COUNTERS.has(w.sourceSpan) && /^[一两三四五六七八九十百千0-9]/.test(w.chinese)) {
+        const pos = sourceText.indexOf(w.sourceSpan);
+        const before = sourceText.slice(0, pos).match(/([가-힣0-9]+)\s+$/);
+        if (before) {
+          const cand = before[1] + " " + w.sourceSpan;
+          if (sourceText.includes(cand)) w.sourceSpan = cand;
+        }
+      }
       // 显式主语:我←∅ 但原文有独立的 저는/저/나는/제가 → 补上
       if (w.chinese === "我" && !w.sourceSpan) {
         const hit = ["저는", "제가", "나는", "저", "나"].find(p => koTokens.includes(p));
@@ -401,17 +411,21 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     English: { "什么": ["what"], "谁": ["who"], "哪里": ["where"], "哪儿": ["where"],
       "什么时候": ["when"], "为什么": ["why"], "怎么": ["how"], "多少": ["how much", "how many"] },
     Japanese: { "什么": ["何"], "谁": ["誰", "だれ"], "哪里": ["どこ"], "什么时候": ["いつ"],
-      "为什么": ["なぜ", "どうして"], "怎么": ["どう"], "多少": ["いくら"], "几": ["何"] },
+      "为什么": ["なぜ", "どうして"], "怎么": ["どう"], "多少": ["いくら"], "几": ["何"],
+      "散步": ["散歩"], "加班": ["残業"], "开会": ["会議"] },
     Korean: { "什么": ["뭐", "무엇"], "谁": ["누구"], "哪里": ["어디"], "什么时候": ["언제"],
       "为什么": ["왜"], "怎么": ["어떻게"], "多少": ["얼마"], "几": ["몇"],
-      "是": ["입니다", "이에요", "예요", "이세요"], "下雨": ["비가 오", "비가 와"], "很重": ["무거워", "무거우"] },
+      "是": ["입니다", "이에요", "예요", "이세요"], "下雨": ["비가 오", "비가 와"], "很重": ["무거워", "무거우"],
+      "会": ["거예요", "수 있"], "在": ["계세"], "茶": ["차"] },
     Vietnamese: { "什么": ["gì"], "谁": ["ai"], "哪里": ["đâu"], "什么时候": ["khi nào", "bao giờ"],
       "为什么": ["sao", "tại sao"], "怎么": ["thế nào"], "多少": ["bao nhiêu"], "几": ["mấy"],
       "了": ["rồi", "đã"], "吗": ["chưa", "hả", "nhé", "à"],
-      "妹妹": ["Em gái", "em gái"], "父亲": ["Bố", "bố"], "新鲜": ["tươi"] },
+      "妹妹": ["Em gái", "em gái"], "父亲": ["Bố", "bố"], "新鲜": ["tươi"],
+      "太": ["quá", "lắm"], "极了": ["quá"] },
     Thai: { "什么": ["อะไร"], "谁": ["ใคร"], "哪里": ["ที่ไหน"], "什么时候": ["เมื่อไหร่", "เมื่อไร"],
       "为什么": ["ทำไม"], "怎么": ["ยังไง", "อย่างไร"], "多少": ["เท่าไหร่", "เท่าไร"], "几": ["กี่"],
-      "了": ["แล้ว"], "很": ["มาก"], "六点": ["หกโมง"], "下雨": ["ฝนตก"], "吗": ["ไหม", "หรือยัง"] },
+      "了": ["แล้ว"], "很": ["มาก"], "六点": ["หกโมง"], "下雨": ["ฝนตก"], "吗": ["ไหม", "หรือยัง"],
+      "早上": ["เช้า"], "晚上": ["เย็น", "กลางคืน"] },
     Indonesian: { "什么": ["apa"], "谁": ["siapa"], "哪里": ["mana"], "什么时候": ["kapan"],
       "为什么": ["kenapa", "mengapa"], "怎么": ["bagaimana"], "多少": ["berapa"], "几": ["berapa"],
       "已经": ["sudah", "telah"], "了": ["sudah"], "这": ["ini"], "那": ["itu"],
@@ -488,6 +502,24 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         while (parts.length > 1 && VI_FUNC.includes(parts[0].toLowerCase())) parts.shift();
         const joined = parts.join(" ");
         if (joined !== w.sourceSpan && sourceText.includes(joined)) w.sourceSpan = joined;
+      }
+      // 指示词吞名词:这个←Bài toán này → 这个←này,名词还给空块
+      if (/^[这那][个些]?$/.test(w.chinese) && w.sourceSpan) {
+        const mDem = w.sourceSpan.match(/^(.+)\s+(này|đó|kia|ấy)$/i);
+        if (mDem) {
+          w.sourceSpan = mDem[2];
+          const t = ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
+          if (t && sourceText.includes(mDem[1])) t.sourceSpan = mDem[1];
+        }
+      }
+      // 亲属词只认了性别词(妹妹←gái)→ 往前并入 em/anh/chị(Em gái)
+      if (["gái", "trai"].includes((w.sourceSpan || "").toLowerCase())) {
+        const pos = sourceText.indexOf(w.sourceSpan);
+        const before = sourceText.slice(0, pos).match(/(\S+)\s+$/);
+        if (before && ["em", "anh", "chị"].includes(before[1].toLowerCase())) {
+          const cand = before[1] + " " + w.sourceSpan;
+          if (sourceText.includes(cand)) w.sourceSpan = cand;
+        }
       }
       // 时间块吞点钟(明天早上←Tám giờ sáng mai)→ X giờ 让给空的 N点 块
       if (!/点/.test(w.chinese) && w.sourceSpan) {
@@ -632,6 +664,14 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         ? ws.find(x => x.chinese === "吗" && !x.sourceSpan)
         : ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan);
       if (t && sourceText.includes(root)) t.sourceSpan = root;
+    }
+    // se+量词 = 一X:sekilo/sebuah 未被认领 → 给空的 一X/X公斤 块
+    for (const tok of sourceText.split(/\s+/).map(t => t.replace(/[.,!?]/g, ""))) {
+      if (!/^se(kilo|buah|ekor|gelas|botol|potong|orang|lembar|porsi)/i.test(tok)) continue;
+      if (ws.some(x => x.sourceSpan && (x.sourceSpan.includes(tok) || tok.includes(x.sourceSpan)))) continue;
+      const t = ws.find(x => /^[一这]|公斤|斤$/.test(x.chinese) && !x.sourceSpan &&
+                        ["numeral", "number", "measureWord", "noun"].includes(x.partOfSpeech));
+      if (t) t.sourceSpan = tok;
     }
     // 未认领整词扫描:Rumahnya/Benarkah 这类完全没被认领的词 → 拆开分给空块
     const ID_KAH_ROOTS = { "benar": "真", "bisa": "能", "boleh": "可", "ada": "有", "sudah": "已", "mau": "要", "perlu": "需" };
@@ -809,6 +849,14 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   // ⑥ 介词/标记转移(用户标注得出的确定性规则)
   //   把←put 这类:把 是语法标记,span 让给后面的动词;被←was → 被←by(若原文有 by);
   //   在←on/in + 后面有空着的方位词 上/里 → span 让给方位词;坐←goes + 原文有 by → 坐←by
+  if (srcLang === "English") {
+    for (const w of ws) {
+      const mArt = (w.sourceSpan || "").match(/^(the|a|an|The|A|An)\s+(.+)$/);
+      if (mArt && !/^[一这那這]/.test(w.chinese) && sourceText.includes(mArt[2])) w.sourceSpan = mArt[2];
+      if (/^(the|The)$/.test(w.sourceSpan || "")) w.sourceSpan = "";
+      if (/^(a|an|A|An)$/.test(w.sourceSpan || "") && !/^一/.test(w.chinese)) w.sourceSpan = "";
+    }
+  }
   const BE_FORMS = new Set(["was", "were", "is", "are", "be", "been", "Was", "Were", "Is", "Are"]);
   const GO_FORMS = /^(go(es)?|went|take[sn]?|took|get[s]?|got)$/i;
   for (let i = 0; i < m2.length; i++) {
@@ -822,6 +870,16 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       w.sourceSpan = "";
     }
     if (srcLang === "English") {
+      if (["拿", "把"].includes(w.chinese) && w.sourceSpan) {
+        const i0 = m2.indexOf(w);
+        for (let j = i0 + 1; j < m2.length && m2[j].chinese !== "。"; j++) {
+          if (/(比较|比較|对比|相比)/.test(m2[j].chinese)) {
+            if (!m2[j].sourceSpan) m2[j].sourceSpan = w.sourceSpan;
+            w.sourceSpan = "";
+            break;
+          }
+        }
+      }
       if (w.chinese === "被" && BE_FORMS.has(w.sourceSpan) && /\bby\b/.test(sourceText)) {
         w.sourceSpan = "by";
       }
@@ -973,7 +1031,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.4.2", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.5", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
