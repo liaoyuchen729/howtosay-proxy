@@ -1091,7 +1091,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.6.1", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.6.2", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1147,6 +1147,8 @@ export function mountZhRoutes(app, deps) {
         messages: [ sys(systemPromptZh(sourceLanguage, script)), usr(userMsg) ]
       });
       const parsed = JSON.parse(content);
+      // 只读调试:抓修正前原始词块(用于确定性回归,不改变正常响应结构)
+      const rawWords = req.body.__raw ? JSON.parse(JSON.stringify(parsed.words || [])) : null;
       // 词对齐确定性修正(去幻觉/剥助词/合并/去重)—— 见 fixupZhAlignment
       const words = fixupZhAlignment(sourceText, parsed.words || [], sourceLanguage);
       // grammarPoints: templateKey 命中就用它当 name(App 据 name 查本地模板)
@@ -1154,7 +1156,7 @@ export function mountZhRoutes(app, deps) {
         name: g.templateKey && g.templateKey.length ? g.templateKey : (g.name || ""),
         triggerWords: g.triggerWords || []
       })).filter(g => g.name);
-      res.json({ translation: parsed.translation, words, grammarPoints });
+      res.json({ translation: parsed.translation, words, grammarPoints, ...(rawWords ? { rawWords } : {}) });
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
   });
 
