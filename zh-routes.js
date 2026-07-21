@@ -965,8 +965,15 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   // 语言块清完强凑 span 后,第二次 QMAP 补空(很←Hace 被清 → 补 mucho)
   qmapFill();
   // ⑤a 标点块
+  const PUNCT_MAP = { "。": [".", "。"], "，": [",", "，", "、"], "、": ["、", ",", "，"],
+                      "？": ["?", "？"], "！": ["!", "！"], "：": [":", "："], "；": [";", "；"] };
   for (const w of ws) {
     if (PUNCT_RE.test(w.chinese) && w.sourceSpan && !PUNCT_RE.test(w.sourceSpan)) w.sourceSpan = "";
+    // 标点块空着 → 对齐源文里对应的标点(。←. ，←, ？←?)
+    if (PUNCT_MAP[w.chinese] && !w.sourceSpan) {
+      const cand = PUNCT_MAP[w.chinese].find(p => sourceText.includes(p));
+      if (cand) w.sourceSpan = cand;
+    }
     // 非标点块不许带走首尾标点(Maaf, → Maaf),标点留给标点块认领;纯标点 span 清空(吗←¿)
     if (!PUNCT_RE.test(w.chinese) && w.sourceSpan) {
       const t = w.sourceSpan.replace(/[.,!?;:。、!?]+$/, "").replace(/^[¿¡«"']+/, "");
@@ -1237,7 +1244,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.9", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.9.1", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
