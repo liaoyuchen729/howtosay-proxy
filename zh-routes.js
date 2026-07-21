@@ -173,6 +173,11 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     if (PRON_STEM.test(stem) || DE_FIXED.has(w.chinese) ||
         (de === "得" && DE_VERB.has(w.chinese)) ||
         (de === "地" && DI_NOUN.has(w.chinese))) { splitDe.push(w); continue; }
+    // 冗余补语脚手架:拆出的 stem 会与已有块同span重复认领(说…说得←speaks)→ 不拆,
+    // 整块留给认领去重变 ∅,避免造出孤立的 得←∅ 噪声
+    if (words.some(x => x !== w && x.chinese === stem && x.sourceSpan === w.sourceSpan)) {
+      splitDe.push(w); continue;
+    }
     const pys = (w.pinyin || "").split(/\s+/);
     splitDe.push(
       { chinese: stem, partOfSpeech: w.partOfSpeech, sourceSpan: w.sourceSpan || "",
@@ -1091,7 +1096,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.6.2", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.6.3", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
