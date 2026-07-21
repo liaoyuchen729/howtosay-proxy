@@ -137,6 +137,7 @@ function systemPromptZh(srcLang, script) {
 // ④ 数词/指示词+量词 合并(三+本→三本);动词+了/过 合并(买+了→买了);代词+的 合并(我+的→我的)
 // ⑤ 标点块不许认领文字;全局去重(同一 span 只能被认领一次,后者清空)
 const JA_TRAIL_PARTICLES = new Set(["は","が","を","に","へ","と","も","の","や","ね","よ"]);
+const JA_MO_ADVERBS = ["とても","いつも","どうも","なにも","だれも","なんでも","いつでも","そもそも","もっとも"];
 // 词汇词/固定搭配:结尾字符碰巧像助词,但绝不能剥(この≠こ+の,やっと≠やっ+と)
 const JA_PROTECTED = new Set(["この","その","あの","どの","ここ","そこ","あそこ","どこ","どんな",
   "まで","までに","ので","のに","こと","もの","やっと","ちょっと","もっと","ずっと","きっと",
@@ -204,6 +205,24 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       "打电话": { v: "打", nJa: ["電話"], vJa: ["かけ", "し"] },
       "看书":   { v: "看", nJa: ["本"], vJa: ["読み", "読ん", "読む"] },
     };
+    // て形动词链拆分:買ってあげました → 买了←買って + 给←あげました(转移给空的 给/请 块)
+    const JA_TE_AUX = [
+      { re: /^(.+て)(あげました|あげます|あげる|あげた|あげて)$/, zh: ["给"] },
+      { re: /^(.+て)(くれました|くれます|くれる|くれた|くれて)$/, zh: ["给"] },
+      { re: /^(.+て)(もらいました|もらいます|もらう|もらった)$/, zh: ["请", "让"] },
+    ];
+    for (const w of ws) {
+      if (!w.sourceSpan || !/[\u3040-\u30FF]/.test(w.sourceSpan)) continue;
+      for (const aux of JA_TE_AUX) {
+        const m = w.sourceSpan.match(aux.re);
+        if (!m) continue;
+        const t = ws.find(x => aux.zh.includes(x.chinese) && (!x.sourceSpan || x.sourceSpan === w.sourceSpan));
+        if (t && sourceText.includes(m[1]) && sourceText.includes(m[2])) {
+          w.sourceSpan = m[1]; t.sourceSpan = m[2];
+        }
+        break;
+      }
+    }
     for (let i = 0; i < ws.length; i++) {
       const w = ws[i], vo = JA_VO[w.chinese];
       if (!vo) continue;
@@ -243,6 +262,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       while (s.length > 1 && !JA_PROTECTED.has(s) && JA_TRAIL_PARTICLES.has(s[s.length - 1])
              && !(s[s.length - 1] === "と" && s[s.length - 2] === "こ")   // こと 的 と 是词内,不剥
              && !(s[s.length - 1] === "の" && s[s.length - 2] === "も")   // もの 同理
+             && !(s[s.length - 1] === "も" && (s.endsWith("ても") || s.endsWith("でも") || JA_MO_ADVERBS.includes(s)))  // とても/でも/いつも 等 も 是词内
             ) s = s.slice(0, -1);
       // ③ 末尾 で
       if (s.length > 1 && s.endsWith("で") && !JA_PROTECTED.has(s)) {
@@ -297,6 +317,19 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           /[\u4E00-\u9FFF]/.test(w.sourceSpan || "")) w.sourceSpan = "";
       // ⑦d 坐(交通)只许认 乗る系;认了 行く/去く 等 → ∅(坐是补出的,让 去 认 行く)
       if (w.chinese === "坐" && w.sourceSpan && !/乗/.test(w.sourceSpan)) w.sourceSpan = "";
+      // ⑦e 可以/好 吞了疑问助词 か(もいいですか)→ 剥出转移给 吗
+      if (["可以", "好", "行", "能"].includes(w.chinese) && /か$/.test(w.sourceSpan || "") && w.sourceSpan.length > 1) {
+        w.sourceSpan = w.sourceSpan.slice(0, -1);
+        const q = ws.find(x => x.chinese === "吗" && !x.sourceSpan);
+        if (q) q.sourceSpan = "か";
+      }
+      // ⑦f 一个/一位/一名 等补出量词吞裸名词(一个←人,原文无数词)→ ∅,名词让给空块
+      if (/^一[个位名只条本]$/.test(w.chinese) && /^[\u4E00-\u9FFF]{1,3}$/.test(w.sourceSpan || "") &&
+          !/[一二三四五六七八九十百千万１２３４５６７８９０0-9]/.test(sourceText.slice(0, sourceText.indexOf(w.sourceSpan)).slice(-2))) {
+        const noun = ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan && x !== w);
+        if (noun) noun.sourceSpan = w.sourceSpan;
+        w.sourceSpan = "";
+      }
       // ⑧ 单字能愿/虚词不许认领纯汉字实词(会←会議);清掉的 span 转移给后面空名词块
       if (w.chinese.length === 1 && ["auxiliary", "particle", "adverb"].includes(w.partOfSpeech) &&
           /^[\u4E00-\u9FFF]{2,}$/.test(w.sourceSpan || "")) {
@@ -964,6 +997,13 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         const rest = sourceText.slice(pos + w.sourceSpan.length).match(/^\s+([A-Za-z]+)\s+of\b/);
         if (rest) w.sourceSpan = w.sourceSpan + " " + rest[1];
       }
+      // 一个/一位 吞 "A friend"(通用量词误并实词名词)→ 收缩到冠词,名词让给空名词块
+      const mAF = (w.sourceSpan || "").match(/^(a|an|A|An)\s+([A-Za-z]+)$/);
+      if (/^一[个位名只]$/.test(w.chinese) && mAF) {
+        w.sourceSpan = mAF[1];
+        const noun = ws.find(x => x.partOfSpeech === "noun" && !x.sourceSpan && x !== w);
+        if (noun && sourceText.includes(mAF[2])) noun.sourceSpan = mAF[2];
+      }
       // 吗/呢/吧:英语无句末疑问助词(靠倒装),强凑 aux → ∅
       if (["吗", "呢", "吧"].includes(w.chinese) && w.sourceSpan) w.sourceSpan = "";
       // 已经=added already,不许认 be 动词(been/be/is/am/are)
@@ -1048,9 +1088,15 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   function findSpan(s, fromIdx) {
     let idx = fromIdx;
     const wordLike = LATIN_BOUNDARY && /\p{L}/u.test(s[0]) && /\p{L}/u.test(s[s.length - 1]);
+    const jaShi = srcLang === "Japanese" && s === "し";  // 并列助词 し 只认子句连接位
     while (true) {
       const p = sourceText.indexOf(s, idx);
       if (p === -1) return -1;
+      if (jaShi) {
+        const nx = sourceText[p + 1];
+        if (nx !== undefined && !/[、。,.\s]/.test(nx)) { idx = p + 1; continue; }
+        return p;
+      }
       if (!wordLike) return p;
       const before = sourceText[p - 1], after = sourceText[p + s.length];
       // 印尼语黏着词缀:nya/kah 作 span 时允许词内后缀位;词根后紧跟词缀时允许右界是字母
@@ -1154,7 +1200,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.7", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.8", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
