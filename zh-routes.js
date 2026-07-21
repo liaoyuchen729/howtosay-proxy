@@ -167,7 +167,8 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   const splitDe = [];
   for (const w of words) {
     const m = w.chinese.match(/^(.+?)([的得地])$/);
-    if (!m || w.chinese.length < 2) { splitDe.push(w); continue; }
+    // span 为空的块不拆:拆了 stem 也找不到对应,只会造出孤立的 得←∅ 噪声块
+    if (!m || w.chinese.length < 2 || !w.sourceSpan) { splitDe.push(w); continue; }
     const [ , stem, de ] = m;
     if (PRON_STEM.test(stem) || DE_FIXED.has(w.chinese) ||
         (de === "得" && DE_VERB.has(w.chinese)) ||
