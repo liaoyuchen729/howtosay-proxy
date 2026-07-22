@@ -386,18 +386,23 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       "醫院": "病院", "医院": "病院"
     };
     for (const w of ws) {
-      if (w.sourceSpan || !["noun", "verb", "adjective"].includes(w.partOfSpeech)) continue;
+      if (!["noun", "verb", "adjective"].includes(w.partOfSpeech)) continue;
       const cjk = w.chinese.replace(/[^\u4E00-\u9FFF]/g, "");
       if (cjk.length < 2) continue;
-      // 同形 或 字级归一后同形(運動←運動;运动→運動←運動)
-      for (const cand of [cjk, toJa(cjk)]) {
-        if (sourceText.includes(cand) && !ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.includes(cand))) {
-          w.sourceSpan = cand; break;
+      // 候选原文形:同形 / 字级归一 / 词级异体(運動←運動;运动→運動;联系→連絡)
+      const cands = [...new Set([cjk, toJa(cjk), JA_ZH_VARIANT[w.chinese]].filter(Boolean))];
+      // (a) span 以某候选打头且更长(運動してない→運動、連絡していない→連絡):收缩,余下让给别的块
+      if (w.sourceSpan) {
+        const pre = cands.find(c => w.sourceSpan.length > c.length && w.sourceSpan.startsWith(c));
+        if (pre) w.sourceSpan = pre;
+        continue;   // 有 span 的只做收缩,不新认领
+      }
+      // (b) 空块:某候选在原文出现且未被别的块认领 → 对齐
+      for (const c of cands) {
+        if (sourceText.includes(c) && !ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.includes(c))) {
+          w.sourceSpan = c; break;
         }
       }
-      if (w.sourceSpan) continue;
-      const v = JA_ZH_VARIANT[w.chinese];                     // 词级异体(聯絡/联络←連絡)
-      if (v && sourceText.includes(v) && !ws.some(x => x !== w && x.sourceSpan === v)) w.sourceSpan = v;
     }
   }
   if (srcLang === "Korean") {
@@ -1352,7 +1357,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.14", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.15", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
