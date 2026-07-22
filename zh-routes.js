@@ -1294,7 +1294,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.11", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.12", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1468,12 +1468,28 @@ export function mountZhRoutes(app, deps) {
           required: ["name","meaning","structure","examples"], additionalProperties: false
         }),
         messages: [
-          sys(`Explain the Chinese grammar point for a ${sourceLanguage}-speaking learner. ` +
-              `meaning + structure in ${sourceLanguage}; provide 2 example sentences in ${scriptName(script)} with pinyin (tone marks) and ${sourceLanguage} gloss.`),
+          sys(`Explain the Chinese grammar point for a ${sourceLanguage}-speaking learner.\n` +
+              `- meaning: in ${sourceLanguage}.\n` +
+              `- structure: the pattern, in ${sourceLanguage}.\n` +
+              `- examples: 2 sentences. For EACH example give THREE separate fields:\n` +
+              `    · zh = the Chinese sentence in ${scriptName(script)}.\n` +
+              `    · pinyin = Mandarin romanization WITH tone marks.\n` +
+              `    · gloss = a natural TRANSLATION of the sentence into ${sourceLanguage}, written in ${sourceLanguage}'s OWN words and script. NEVER put pinyin/romanization here — gloss and pinyin must be different.\n` +
+              `Correct example for a Japanese learner: {"zh":"我把门关上了。","pinyin":"wǒ bǎ mén guān shàng le","gloss":"私はドアを閉めました。"}`),
           usr(`Grammar point: ${name}`)
         ]
       });
       const out = JSON.parse(content);
+      // 守卫:模型偶尔把拼音塞进 gloss(译文位)→ 清空,App 端就只显示 拼音+汉字,不出现两条拼音
+      const looksPinyin = g => {
+        if (!g) return false;
+        const noTone = g.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return /^[a-zA-Z0-9\s.,!?;:'"·-]+$/.test(noTone);   // 纯拉丁+声调符 = 罗马音,非译文
+      };
+      const nonLatinTarget = ["Japanese", "Korean", "Thai"].includes(sourceLanguage);
+      for (const ex of out.examples || []) {
+        if (ex.gloss && (ex.gloss === ex.pinyin || (nonLatinTarget && looksPinyin(ex.gloss)))) ex.gloss = "";
+      }
       cachePut(grammarCacheZh, key, out);
       res.json(out);
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
