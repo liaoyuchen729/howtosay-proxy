@@ -23,7 +23,7 @@ const POS_ZH = ["noun","verb","adjective","adverb","pronoun","preposition","conj
   "measureWord","particle","auxiliary","interjection","number","idiom","unknown"];
 
 // —— 本地语法模板名清单(与 App GrammarDB 的 name 一一对应;模型据此挑 templateKey)——
-const TEMPLATE_NAMES_ZH = ["把 sentence: basic","把 + 在/到 + place","把 + 给","把 + 成/作","Negation before 把","Passive 被","Passive 被 without doer","Passive 让/叫","Negation before 被","是…的: time","是…的: place","是…的: means","Result complement 完","Result complement 到","Result complement 见","Result complement 懂","Result complement 好","Result complement 错","Result complement 会","Negation 没 + V + complement","Direction complement 来/去","Compound direction complement","Direction complement with place","Extended 起来","Extended 下去","Potential complement V得C","Potential complement V不C","Capacity 得下/不下","Degree complement 得很/极了","Duration complement","Frequency complement 次/遍","太…了","V + 一下","Modal 会 (skill)","Modal 会 (likelihood)","Modal 能","Modal 可以","Modal 要 (want/going to)","Modal 想","Modal 应该","Modal 得 děi","不用 (no need)","Modal 敢","Comparison 比","比 + degree","Equality 跟…一样","Negative comparison 没有","不比 (not more than)","越来越","越…越…","Superlative 最","Existential 有","Existential 是","Existential V着","Serial verbs 连动句","Pivotal 兼语句","Double objects","Time before verb","Location 在 + place + V","Measure word structure","Verbal measure 次/遍","Verb reduplication VV/V一V","Verb reduplication V了V","Adjective reduplication AABB","有点儿 vs 一点儿","Distance 离","因为…所以…","虽然…但是…","如果…就…","一…就…","先…再…","又…又…","一边…一边…","不但…而且…","只要…就…","除了…以外","连…都/也…","对…来说","跟/和…一起","为了…","不是…而是…","Completion 了","Change-of-state 了","Negation 没(有)","Experience 过","Negation 没…过","Continuing state 着","V1着 V2","Progressive 在/正在","Modification 的","Adverbial 地","Degree complement 得","Question particle 吗","Follow-up particle 呢","Suggestion particle 吧","Exclamation particle 啊","About to happen 快…了/要…了","Just now 刚/刚才","就 (earlier than expected)","才 (later than expected)","再 vs 又","Yes/no question 吗","A-not-A question","Question word 什么","Question word 谁","Question words 哪儿/哪里","Question word 怎么","Question words 几/多少","How + adjective 多","V过没有 question"];
+const TEMPLATE_NAMES_ZH = ["把 sentence: basic","把 + 在/到 + place","把 + 给","把 + 成/作","Negation before 把","Passive 被","Passive 被 without doer","Passive 让/叫","Negation before 被","是…的: time","是…的: place","是…的: means","Result complement 完","Result complement 到","Result complement 见","Result complement 懂","Result complement 好","Result complement 错","Result complement 会","Negation 没 + V + complement","Direction complement 来/去","Compound direction complement","Direction complement with place","Extended 起来","Extended 下去","Potential complement V得C","Potential complement V不C","Capacity 得下/不下","Degree complement 得很/极了","Duration complement","Frequency complement 次/遍","太…了","V + 一下","Modal 会 (skill)","Modal 会 (likelihood)","Modal 能","Modal 可以","Modal 要 (want/going to)","Modal 想","Modal 应该","Modal 得 děi","不用 (no need)","Modal 敢","Comparison 比","比 + degree","Equality 跟…一样","Negative comparison 没有","不比 (not more than)","越来越","越…越…","Superlative 最","Existential 有","Existential 是","Existential V着","Serial verbs 连动句","Pivotal 兼语句","Double objects","Time before verb","Location 在 + place + V","Measure word structure","Verbal measure 次/遍","Verb reduplication VV/V一V","Verb reduplication V了V","Adjective reduplication AABB","有点儿 vs 一点儿","Distance 离","因为…所以…","虽然…但是…","如果…就…","一…就…","先…再…","又…又…","一边…一边…","不但…而且…","只要…就…","除了…以外","连…都/也…","对…来说","跟/和…一起","为了…","不是…而是…","Completion 了","Change-of-state 了","Negation 没(有)","Experience 过","Negation 没…过","Continuing state 着","V1着 V2","Progressive 在/正在","Modification 的","Adverbial 地","Degree complement 得","Question particle 吗","Follow-up particle 呢","Suggestion particle 吧","Exclamation particle 啊","About to happen 快…了/要…了","Just now 刚/刚才","就 (earlier than expected)","才 (later than expected)","再 vs 又","Yes/no question 吗","A-not-A question","Question word 什么","Question word 谁","Question words 哪儿/哪里","Question word 怎么","Question words 几/多少","How + adjective 多","V过没有 question","Adjective predicate 很"];
 const TEMPLATE_ENUM_ZH = ["", ...TEMPLATE_NAMES_ZH];
 
 // —— 风格描述(中文语体)——
@@ -1224,110 +1224,143 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   return m2;
 }
 // 结构词 → 正确模板名(简繁双写)。优先级从上到下,取触发词里命中的第一个。
-const STRUCT_TEMPLATES = [
-  { marks: ["把"], tpl: "把 sentence: basic" },
-  { marks: ["被"], tpl: "Passive 被" },
-  { marks: ["让", "讓", "叫", "使", "请", "請"], tpl: "Pivotal 兼语句" },   // 使役兼语句(让我感到…)
-  { marks: ["起来", "起來"], tpl: "Extended 起来" },
-  { marks: ["下去"], tpl: "Extended 下去" },
-  { marks: ["越来越", "越來越"], tpl: "越来越" },
-  { marks: ["过", "過"], tpl: "Experience 过" },
-  // 成对/关联结构(用「独特标记」作 key,避免误伤:又 单独≠又…又,须 既 触发)
-  { marks: ["既"], tpl: "又…又…" },              // 既…又…(既漂亮又温柔)≈ 又…又…
-  { marks: ["一边", "一邊"], tpl: "一边…一边…" },
-  { marks: ["虽然", "雖然"], tpl: "虽然…但是…" },
-  { marks: ["因为", "因為"], tpl: "因为…所以…" },
-  { marks: ["不但"], tpl: "不但…而且…" },
-  { marks: ["除了"], tpl: "除了…以外" },
-  { marks: ["不是"], tpl: "不是…而是…" },   // 需搭配 而是,下面 correctGrammarPoints 会校验
+// ═══ 语法点纠偏/补全/校验:统一规则表 ═══
+// 每条 = { tpl:模板名(须∈110库), detect:译文里出现即认定该语法存在, trig:触发词 }。
+// detect 同时用于:①补全(模型漏了就补) ②校验(模型给了但 detect 不中 → 幻觉,丢弃)。
+// 顺序=优先级(某触发词被多条命中时靠前的赢)。谨慎写 detect,宁缺勿滥(避免误加)。
+const G_RULES = [
+  // —— 句式 ——
+  { tpl: "把 sentence: basic", detect: /把[^，。？！]/, trig: "把" },
+  { tpl: "Passive 被",        detect: /被/, trig: "被" },
+  { tpl: "Pivotal 兼语句",    detect: /(让|讓|叫|使|请|請)[我你他她它人们們大家咱您学學孩父母老师師同]/, trig: "让" },
+  { tpl: "是…的: time",       detect: /是[^，。的]{0,10}(?:来|來|去|买|買|做|学|學|写|寫|说|說|看|坐|开|開|走|发生|發生|见|見|认识|認識|到|回|出生|完成|结婚|結婚|花)[^，。]{0,4}的/, trig: "是…的" },
+  { tpl: "Existential 有",    detect: /(?:这里|那里|這裡|那裡|附近|上面|里面|裡面|外面|旁边|旁邊)[^，。]{0,4}有/, trig: "有" },
+  // —— 补语:结果 ——
+  { tpl: "Result complement 完", detect: /(?:做|吃|看|写|寫|读|讀|用|花|喝|听|聽|说|說|学|學)完/, trig: "完" },
+  { tpl: "Result complement 到", detect: /(?:找|买|買|看|听|聽|得|收|等|遇|见|見|想|提|达|達)到/, trig: "到" },
+  { tpl: "Result complement 懂", detect: /(?:听|聽|看|读|讀)懂/, trig: "懂" },
+  { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)见|見/, trig: "见" },
+  // —— 补语:趋向 ——
+  { tpl: "Extended 起来", detect: /起来|起來/, trig: "起来" },
+  { tpl: "Extended 下去", detect: /下去/, trig: "下去" },
+  { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)/, trig: "来/去" },
+  // —— 补语:可能 ——
+  { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過)/, trig: "不" },
+  { tpl: "Potential complement V得C", detect: /[一-龥]得(?:了|下|动|動|完|起|来|來|见|見|懂|到|上)/, trig: "得" },
+  // —— 补语:时长/动量 ——
+  { tpl: "Duration complement", detect: /(?:了|过|過)?[一二三四五六七八九十两兩几幾半0-9]+(?:年|个月|個月|天|小时|小時|分钟|分鐘|周|週|星期|个小时|個小時)/, trig: "时长" },
+  { tpl: "Frequency complement 次/遍", detect: /[二三四五六七八九十两兩几幾0-9]+(?:次|遍|趟)|[一](?:次|遍|趟)(?![到家])/, trig: "次/遍" },
+  // —— 量词 ——
+  { tpl: "Measure word structure", detect: /[一二三四五六七八九十两兩几幾这那這那每半0-9]\s?(?:个|個|本|张|張|只|隻|条|條|件|位|杯|瓶|部|台|块|塊|朵|份|间|間|棵|颗|顆|支|首|场|場|页|頁|双|雙|对|對|碗|盘|盤|辆|輛|篇|封|头|頭|匹|群|束|串)/, trig: "量词" },
+  // —— 能愿 ——
+  { tpl: "Modal 会 (skill)", detect: /会说|会写|会做|会开|会游|会弹|會說|會寫|會[^，。]{0,3}(?:语|話|车)|会[一-龥]/, trig: "会" },
+  { tpl: "Modal 能", detect: /(?:^|[^可])能[一-龥]/, trig: "能" },
+  { tpl: "Modal 可以", detect: /可以/, trig: "可以" },
+  { tpl: "Modal 想", detect: /(?:^|[我你他她们們])想[一-龥]/, trig: "想" },
+  { tpl: "Modal 要 (want/going to)", detect: /(?:^|[我你他她们們])要[一-龥]/, trig: "要" },
+  { tpl: "Modal 应该", detect: /应该|應該/, trig: "应该" },
+  { tpl: "不用 (no need)", detect: /不用[一-龥]/, trig: "不用" },
+  // —— 比较 ——
+  { tpl: "越来越", detect: /越来越|越來越/, trig: "越来越" },
+  { tpl: "越…越…", detect: /越[^。！？]{1,6}越/, trig: "越" },
+  { tpl: "Comparison 比", detect: /[一-龥]比[一-龥]/, trig: "比" },
+  { tpl: "Equality 跟…一样", detect: /(?:跟|和|与|與)[^，。]{1,8}一样|一樣/, trig: "一样" },
+  { tpl: "Negative comparison 没有", detect: /没有[^，。]{1,8}(?:那么|這么|这么|那麼|高|大|好|多|重)/, trig: "没有" },
+  { tpl: "Superlative 最", detect: /最[一-龥]/, trig: "最" },
+  // —— 体标记 ——
+  { tpl: "Experience 过", detect: /[一-龥]过(?![来來去程分度])(?=[了吗嗎？。！，]|$|[一-龥])/, trig: "过" },
+  { tpl: "Continuing state 着", detect: /(?:开|開|关|關|穿|戴|拿|坐|站|躺|挂|掛|放|带|帶)着/, trig: "着" },
+  { tpl: "Progressive 在/正在", detect: /正在/, trig: "正在" },
+  // —— 助词 ——
+  { tpl: "Adverbial 地", detect: /[一-龥]地[一-龥]/, trig: "地" },
+  { tpl: "Degree complement 得", detect: /[一-龥]得[一-龥]/, trig: "得" },
+  // —— 疑问 ——
+  { tpl: "Yes/no question 吗", detect: /吗|嗎/, trig: "吗" },
+  { tpl: "Follow-up particle 呢", detect: /呢[？。]?$|呢？/, trig: "呢" },
+  { tpl: "Suggestion particle 吧", detect: /吧[？。！]?$|吧！/, trig: "吧" },
+  { tpl: "A-not-A question", detect: /([去来是有能会會要好對对贵貴累忙冷热熱大小])不\1|是不是|有没有|有沒有/, trig: "A不A" },
+  { tpl: "Question word 什么", detect: /什么|什麼/, trig: "什么" },
+  { tpl: "Question word 谁", detect: /谁|誰/, trig: "谁" },
+  { tpl: "Question words 哪儿/哪里", detect: /哪儿|哪裡|哪里|哪兒/, trig: "哪里" },
+  { tpl: "Question word 怎么", detect: /怎么|怎麼/, trig: "怎么" },
+  { tpl: "Question words 几/多少", detect: /几[个本张只天点岁]|幾[個本張隻天點歲]|多少/, trig: "几/多少" },
+  // —— 关联/连词 ——
+  { tpl: "一边…一边…", detect: /一?[边邊][^，。]{1,6}一?[边邊]/, trig: "一边" },
+  { tpl: "因为…所以…", detect: /因为|因為/, trig: "因为" },
+  { tpl: "虽然…但是…", detect: /虽然|雖然/, trig: "虽然" },
+  { tpl: "如果…就…", detect: /如果|要是/, trig: "如果" },
+  { tpl: "又…又…", detect: /又[^，。]{1,6}又|既[^，。]{1,8}又/, trig: "又" },
+  { tpl: "不但…而且…", detect: /(?:不但|不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不但" },
+  { tpl: "一…就…", detect: /一[^。！？]{1,10}就/, trig: "一…就" },
+  { tpl: "先…再…", detect: /先[一-龥]{1,8}再/, trig: "先…再" },
+  { tpl: "只要…就…", detect: /只要/, trig: "只要" },
+  { tpl: "除了…以外", detect: /除了/, trig: "除了" },
+  { tpl: "不是…而是…", detect: /不是[^，。]{1,12}而是/, trig: "不是" },
+  { tpl: "连…都/也…", detect: /连[^，。]{1,8}(?:都|也)|連[^，。]{1,8}(?:都|也)/, trig: "连" },
+  { tpl: "为了…", detect: /^为了|^為了|，为了|，為了/, trig: "为了" },
+  // —— 重叠 ——
+  { tpl: "Adjective predicate 很", detect: /(?:^|[我你他她它们們人这那這這名個个])很(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴便宜胖瘦难難易甜苦辣咸鹹香臭亮暗新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困乏舒服开心開心紧张緊張]/, trig: "很" },
+  { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
+  { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
+  // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
+  { tpl: "Serial verbs 连动句", detect: /./, trig: "连动", noAdd: true },
+  { tpl: "Double objects", detect: /(?:给|給|送|教|问|問|告诉|告訴|递|遞|借|还|還)(?:了|给|給)?[我你他她您它们們人][一-龥]/, trig: "双宾" },
+  // —— 了(模型基本都给,只校验) ——
+  { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
+  { tpl: "Change-of-state 了", detect: /了[。！？]?$|了！/, trig: "了", noAdd: true },
+  { tpl: "Location 在 + place + V", detect: /在[一-龥]{1,4}(?:里|裡|上|下|中|家|外|边|邊|工作|学习|學習)/, trig: "在", noAdd: true },
+  { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时|有時|偶尔|偶爾/, trig: "时间语序" },
 ];
-// 扫描译文找结构标记 → 对应模板(补全模型漏掉的语法点)。re 命中即认定该语法存在。
-const SCAN_MARKERS = [
-  { re: /把/, tpl: "把 sentence: basic", trig: "把" },
-  { re: /被/, tpl: "Passive 被", trig: "被" },
-  { re: /(让|讓|叫|使|请|請)[我你他她它人們们]/, tpl: "Pivotal 兼语句", trig: "让" },
-  { re: /一边[^，。]{0,6}一边|一邊[^，。]{0,6}一邊|(?<![旁上下里外这那前后左右两三])边[^，。]{1,6}边(?![界儿])|(?<![旁上下裡外這那前後左右兩三])邊[^，。]{1,6}邊(?![界兒])/, tpl: "一边…一边…", trig: "一边" },
-  { re: /既[^，。]{1,8}又/, tpl: "又…又…", trig: "既" },
-  { re: /又[^，。]{1,6}又/, tpl: "又…又…", trig: "又" },
-  { re: /越来越|越來越/, tpl: "越来越", trig: "越来越" },
-  { re: /越[^，。]{1,4}越/, tpl: "越…越…", trig: "越" },
-  { re: /因为|因為/, tpl: "因为…所以…", trig: "因为" },
-  { re: /虽然|雖然/, tpl: "虽然…但是…", trig: "虽然" },
-  { re: /如果[^，。]{1,10}就|如果/, tpl: "如果…就…", trig: "如果" },
-  { re: /不但|不僅|不仅/, tpl: "不但…而且…", trig: "不但" },
-  { re: /除了/, tpl: "除了…以外", trig: "除了" },
-  { re: /不是[^，。]{1,10}而是/, tpl: "不是…而是…", trig: "不是" },
-  { re: /只要/, tpl: "只要…就…", trig: "只要" },
-];
+const G_BY_TPL = new Map(G_RULES.map(r => [r.tpl, r]));
+// 家族别名:模型返回的变体名 → 归一到规则表里的代表名(共享 detect)
+const G_FAMILY = {
+  "把 + 在/到 + place": "把 sentence: basic", "把 + 给": "把 sentence: basic", "把 + 成/作": "把 sentence: basic", "Negation before 把": "把 sentence: basic",
+  "Passive 被 without doer": "Passive 被", "Passive 让/叫": "Pivotal 兼语句", "Negation before 被": "Passive 被",
+  "是…的: place": "是…的: time", "是…的: means": "是…的: time",
+  "Compound direction complement": "Direction complement 来/去", "Direction complement with place": "Direction complement 来/去",
+  "Modal 会 (likelihood)": "Modal 会 (skill)", "Modal 要 (want/going to)": "Modal 要 (want/going to)",
+  "比 + degree": "Comparison 比", "不比 (not more than)": "Comparison 比",
+  "Negation 没…过": "Experience 过", "V1着 V2": "Continuing state 着", "Existential V着": "Continuing state 着",
+  "Question particle 吗": "Yes/no question 吗", "V过没有 question": "A-not-A question",
+  "Verb reduplication VV/V一V": "V + 一下", "Verb reduplication V了V": "V + 一下",
+  "Degree complement 得很/极了": "Degree complement 得",
+};
 function correctGrammarPoints(points, translation) {
+  const KNOWN = new Set(TEMPLATE_NAMES_ZH);
   const out = [];
+  // ① 逐点纠偏 + 校验:先按触发词里的结构标记强制正确模板,再按 detect 校验(不中→丢)
   for (const pt of points) {
     let name = pt.name, triggerWords = pt.triggerWords;
-    // ① 标记纠偏:触发词里有明确结构标记 → 强制正确模板
-    let matched = false;
-    for (const { marks, tpl } of STRUCT_TEMPLATES) {
-      const hit = pt.triggerWords.filter(w => marks.some(m => w === m || w.includes(m)));
-      if (hit.length) {
-        if (tpl === "不是…而是…" && !pt.triggerWords.some(w => /而是/.test(w)) && !/而是/.test(translation)) continue;
-        name = tpl; triggerWords = hit; matched = true; break;
-      }
+    // 结构标记优先(触发词里有 把/被/让/边边/关联词等 → 强制)
+    let forced = null;
+    for (const r of G_RULES) {
+      if (r.noAdd) continue;
+      if (pt.triggerWords.some(w => w === r.trig || (r.trig.length >= 1 && w.includes(r.trig) && /[把被让讓叫使请請边邊既又因虽如]/.test(r.trig)))) { forced = r; break; }
     }
-    // ①b 边…边(不带一)correlative:触发词有 ≥2 个 边/邊 → 一边…一边…
-    if (!matched && pt.triggerWords.filter(w => /^[边邊]$/.test(w)).length >= 2) {
-      name = "一边…一边…"; triggerWords = pt.triggerWords.filter(w => /^[边邊]$/.test(w));
-    }
+    // 边…边(不带一)特例
+    if (!forced && pt.triggerWords.filter(w => /^[边邊]$/.test(w)).length >= 2) forced = G_BY_TPL.get("一边…一边…");
+    if (forced) { name = forced.tpl; triggerWords = [forced.trig]; }
+    // 家族归一
+    if (G_FAMILY[name] && !G_BY_TPL.has(name)) name = G_FAMILY[name];
+    // 校验:该模板有 detect 规则但译文不中 → 模型幻觉,丢
+    const rule = G_BY_TPL.get(name);
+    if (rule && !rule.detect.test(translation)) continue;
+    if (!KNOWN.has(name)) continue;   // 白名单(丢 name 兜底乱造的)
     out.push({ name, triggerWords });
   }
-  // ② 扫描补全:译文里有结构标记但模型没列 → 补上语法点
-  const KNOWN = new Set(TEMPLATE_NAMES_ZH);
-  const haveTpl = new Set(out.map(p => p.name));
-  for (const { re, tpl, trig } of SCAN_MARKERS) {
-    if (haveTpl.has(tpl)) continue;
-    if (re.test(translation)) { out.push({ name: tpl, triggerWords: [trig] }); haveTpl.add(tpl); }
+  // ② 补全:detect 命中但没列的语法(noAdd 的不补)
+  const have = new Set(out.map(p => p.name));
+  for (const r of G_RULES) {
+    if (r.noAdd || have.has(r.tpl)) continue;
+    if (r.detect.test(translation)) { out.push({ name: r.tpl, triggerWords: [r.trig] }); have.add(r.tpl); }
   }
-  // ③ 签名字校验:模板要求的标志字在译文里不存在 → 该语法点是模型幻觉,丢掉(地←没有地)
-  const SIG = [
-    { re: /^Adverbial 地/, need: /地/ }, { re: /^Modification 的/, need: /的/ },
-    { re: /^Degree complement 得|得很|极了/, need: /得/ }, { re: /把/, need: /把/ },
-    { re: /Passive 被|^Negation before 被/, need: /被/ }, { re: /了$|Completion 了|Change-of-state 了/, need: /了/ },
-    { re: /Experience 过|没…过|过没有/, need: /过|過/ }, { re: /Continuing state 着|V1着/, need: /着/ },
-    { re: /Comparison 比|比 \+|不比/, need: /比/ }, { re: /越来越/, need: /越来越|越來越/ },
-    { re: /越…越/, need: /越.{1,4}越/ }, { re: /Pivotal 兼语句|Passive 让\/叫/, need: /让|讓|叫|使|请|請/ },
-    { re: /一边…一边/, need: /一?[边邊].{1,6}一?[边邊]/ }, { re: /因为…所以/, need: /因为|因為/ },
-    { re: /虽然…但是/, need: /虽然|雖然/ }, { re: /如果…就/, need: /如果|要是|的话|的話/ },
-    { re: /又…又/, need: /又.{1,6}又|既.{1,8}又/ }, { re: /不但…而且/, need: /不但|不僅|不仅|而且/ },
-    { re: /除了…以外/, need: /除了/ }, { re: /不是…而是/, need: /不是.{1,10}而是/ },
-    { re: /只要…就/, need: /只要/ }, { re: /是…的/, need: /是.{0,12}的/ },
-    { re: /Extended 起来/, need: /起来|起來/ }, { re: /Extended 下去/, need: /下去/ },
-    { re: /Location 在|在 \+ place/, need: /在/ },
-    { re: /Time before verb/, need: /每天|昨天|明天|今天|现在|現在|以前|以后|以後|时候|時候|早上|晚上|上午|下午|点|點|号|號/ },
-    { re: /Direction complement 来\/去|Compound direction/, need: /来|去|來|上|下|进|出|回|过|起/ },
-    { re: /Result complement 完/, need: /完/ }, { re: /Result complement 到/, need: /到/ },
-    { re: /Result complement 见/, need: /见|見/ }, { re: /Result complement 懂/, need: /懂/ },
-    { re: /Result complement 好/, need: /好/ }, { re: /Result complement 错/, need: /错|錯/ },
-    { re: /Potential complement V得C/, need: /得/ }, { re: /Potential complement V不C/, need: /不/ },
-    { re: /Modal 会/, need: /会|會/ }, { re: /Modal 能/, need: /能/ }, { re: /Modal 可以/, need: /可以/ },
-    { re: /Modal 要/, need: /要/ }, { re: /Modal 想/, need: /想/ }, { re: /Modal 应该/, need: /应该|應該/ },
-    { re: /一…就/, need: /一.{1,8}就/ }, { re: /先…再/, need: /先.{1,8}再/ },
-    { re: /Question particle 吗/, need: /吗|嗎/ }, { re: /Follow-up particle 呢/, need: /呢/ },
-    { re: /Suggestion particle 吧/, need: /吧/ }, { re: /连…都\/也/, need: /连|連/ },
-  ];
-  const validated = out.filter(pt => {
-    const rule = SIG.find(s => s.re.test(pt.name));
-    return !rule || rule.need.test(translation);
-  });
-  // ③b 白名单过滤 + 同名去重 + 封顶 5 个(避免噪声)
-  const kept = validated.filter(pt => KNOWN.has(pt.name));
+  // ③ 同名去重 + 封顶 6
   const seen = new Map();
-  for (const pt of kept) {
-    if (seen.has(pt.name)) {
-      const ex = seen.get(pt.name);
-      for (const w of pt.triggerWords) if (!ex.triggerWords.includes(w)) ex.triggerWords.push(w);
-    } else {
-      seen.set(pt.name, { name: pt.name, triggerWords: [...pt.triggerWords] });
-    }
+  for (const pt of out) {
+    if (seen.has(pt.name)) { for (const w of pt.triggerWords) if (!seen.get(pt.name).triggerWords.includes(w)) seen.get(pt.name).triggerWords.push(w); }
+    else seen.set(pt.name, { name: pt.name, triggerWords: [...pt.triggerWords] });
   }
-  return [...seen.values()].slice(0, 5);
+  return [...seen.values()].slice(0, 6);
 }
 
 function mergeUnits(a, b, pos, sourceText) {
@@ -1388,7 +1421,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.17", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.18", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
