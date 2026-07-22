@@ -369,21 +369,34 @@ function fixupZhAlignment(sourceText, words, srcLang) {
     }
     // ⑪ 同形/异体汉字兜底:空着的实词块,若其汉字在原文里原样出现(運動←運動),或
     //    是常见中日异体词(聯絡←連絡),则对齐。只补空块,claim-once 兜底防重复。
-    // 只列「中日不同形」的常见词(同形词由上面的同形检测处理)
+    // 字级 简/繁 → 日语新字体 归一表(同一个字的不同写法;覆盖高频实词字)
+    const CJK2JA = {"运":"運","動":"動","动":"動","読":"読","读":"読","讀":"読","書":"書","书":"書",
+      "習":"習","习":"習","學":"学","学":"学","語":"語","语":"語","說":"説","说":"説","車":"車","车":"車",
+      "門":"門","门":"門","問":"問","问":"問","題":"題","题":"題","銀":"銀","银":"銀","議":"議","议":"議",
+      "經":"経","经":"経","濟":"済","济":"済","廣":"広","广":"広","術":"術","术":"術","團":"団","团":"団",
+      "應":"応","应":"応","對":"対","对":"対","發":"発","发":"発","場":"場","场":"場","圖":"図","图":"図",
+      "關":"関","关":"関","觀":"観","观":"観","權":"権","权":"権","變":"変","变":"変","戰":"戦","战":"戦",
+      "邊":"辺","边":"辺","賣":"売","卖":"売","買":"買","买":"買","來":"来","来":"来","體":"体","体":"体",
+      "會":"会","会":"会","實":"実","实":"実","寫":"写","写":"写","樂":"楽","乐":"楽","轉":"転","转":"転",
+      "傳":"伝","传":"伝","畫":"画","画":"画","號":"号","号":"号","據":"拠","据":"拠","驗":"験","验":"験"};
+    const toJa = s => [...s].map(c => CJK2JA[c] || c).join("");
+    // 词级异体(不同字表达同一词,字级归一救不了):聯絡/联络 ↔ 連絡
     const JA_ZH_VARIANT = {
-      "聯絡": "連絡", "联络": "連絡", "聯繫": "連絡", "联系": "連絡",
-      "對應": "対応", "对应": "対応", "經濟": "経済", "经济": "経済",
-      "廣告": "広告", "广告": "広告", "藝術": "芸術", "艺术": "芸術",
-      "團體": "団体", "团体": "団体", "醫院": "病院", "医院": "病院"
+      "連絡": "連絡", "聯絡": "連絡", "联络": "連絡", "聯繫": "連絡", "联系": "連絡",
+      "醫院": "病院", "医院": "病院"
     };
     for (const w of ws) {
       if (w.sourceSpan || !["noun", "verb", "adjective"].includes(w.partOfSpeech)) continue;
       const cjk = w.chinese.replace(/[^\u4E00-\u9FFF]/g, "");
-      if (cjk.length >= 2 && sourceText.includes(cjk) &&
-          !ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.includes(cjk))) {
-        w.sourceSpan = cjk; continue;                         // 同形汉字(運動←運動)
+      if (cjk.length < 2) continue;
+      // 同形 或 字级归一后同形(運動←運動;运动→運動←運動)
+      for (const cand of [cjk, toJa(cjk)]) {
+        if (sourceText.includes(cand) && !ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.includes(cand))) {
+          w.sourceSpan = cand; break;
+        }
       }
-      const v = JA_ZH_VARIANT[w.chinese];                     // 异体词(聯絡←連絡)
+      if (w.sourceSpan) continue;
+      const v = JA_ZH_VARIANT[w.chinese];                     // 词级异体(聯絡/联络←連絡)
       if (v && sourceText.includes(v) && !ws.some(x => x !== w && x.sourceSpan === v)) w.sourceSpan = v;
     }
   }
@@ -1339,7 +1352,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.13", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.14", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
