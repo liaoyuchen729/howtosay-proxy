@@ -1241,13 +1241,16 @@ const G_RULES = [
   { tpl: "Result complement 完", detect: /(?:做|吃|看|写|寫|读|讀|用|花|喝|听|聽|说|說|学|學)完/, trig: "完" },
   { tpl: "Result complement 到", detect: /(?:找|买|買|看|听|聽|得|收|等|遇|见|見|想|提|达|達)到/, trig: "到" },
   { tpl: "Result complement 懂", detect: /(?:听|聽|看|读|讀)懂/, trig: "懂" },
+  { tpl: "Result complement 会", detect: /(?:学|學)会|會/, trig: "会", noAdd: true },
+  { tpl: "Result complement 好", detect: /(?:做|准备|準備|写|寫|画|畫|修|收拾|安排|洗)好/, trig: "好", noAdd: true },
+  { tpl: "Result complement 错", detect: /(?:说|說|写|寫|做|听|聽|看|记|記|拿|买|買|走)错|錯/, trig: "错", noAdd: true },
   { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)见|見/, trig: "见" },
   // —— 补语:趋向 ——
   { tpl: "Compound direction complement", detect: /(?:站|坐|跳|拿|举|舉|抬|爬|飞|飛|升|捡|撿|扶|抱|提)(?:了|一)?(?:起来|起來)/, trig: "起来" },
   { tpl: "Extended 起来", detect: /(?:笑|哭|想|唱|说|說|聊|忙|干|幹|做|暖和|热闹|熱鬧|兴奋|興奮|激动|激動|回忆|回憶|讨论|討論|下雨|响|響)(?:了|一)?(?:起来|起來)|(?:看|听|聽|吃|闻|聞)起来/, trig: "起来" },
   { tpl: "Extended 下去", detect: /下去/, trig: "下去" },
   { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)/, trig: "来/去" },
-  { tpl: "Direction complement with place", detect: /(?:回|进|進|出|上|下|过|過)[一-龥]{1,4}(?:来|去|來)/, trig: "趋向" },
+  { tpl: "Direction complement with place", detect: /(?:回|进|進|出|上|下|过|過)[一-龥]{1,4}(?:来|去|來)|(?:跑|走|拿|带|帶|搬|飞|飛|退|逃|寄|扔|放|拉|送|抬|冲|衝)(?:出|进|進|回|上|下)(?:了)?(?:房间|房間|门|門|楼|樓|学校|學校|家|城|国|國|教室|办公室|辦公室|车|車|电梯|電梯|房子|公司|商店|饭馆|飯館)/, trig: "趋向" },
   // —— 补语:可能 ——
   { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/, trig: "不" },
   { tpl: "Potential complement V得C", detect: /[一-龥]得(?:了|下|动|動|完|起|来|來|见|見|懂|到|上)/, trig: "得" },
@@ -1339,11 +1342,12 @@ function correctGrammarPoints(points, translation) {
   // ① 逐点纠偏 + 校验:先按触发词里的结构标记强制正确模板,再按 detect 校验(不中→丢)
   for (const pt of points) {
     let name = pt.name, triggerWords = pt.triggerWords;
-    // 结构标记优先(触发词里有 把/被/让/边边/关联词等 → 强制)
+    // 结构标记优先:仅当触发词是这些「明确的句式结构标记」时才强制纠偏(会/了/的等不强制)
+    const STRUCT_TRIGS = new Set(["把", "被", "让", "既", "又", "因为", "虽然", "如果", "不但", "除了", "不是", "只要", "一边", "越", "越来越", "一…就", "先…再", "连", "为了"]);
     let forced = null;
     for (const r of G_RULES) {
-      if (r.noAdd) continue;
-      if (pt.triggerWords.some(w => w === r.trig || (r.trig.length >= 1 && w.includes(r.trig) && /[把被让讓叫使请請边邊既又因虽如]/.test(r.trig)))) { forced = r; break; }
+      if (r.noAdd || !STRUCT_TRIGS.has(r.trig)) continue;
+      if (pt.triggerWords.some(w => w === r.trig || w.includes(r.trig))) { forced = r; break; }
     }
     // 边…边(不带一)特例
     if (!forced && pt.triggerWords.filter(w => /^[边邊]$/.test(w)).length >= 2) forced = G_BY_TPL.get("一边…一边…");
@@ -1429,7 +1433,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.23", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.24", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
