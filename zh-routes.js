@@ -23,7 +23,7 @@ const POS_ZH = ["noun","verb","adjective","adverb","pronoun","preposition","conj
   "measureWord","particle","auxiliary","interjection","number","idiom","unknown"];
 
 // —— 本地语法模板名清单(与 App GrammarDB 的 name 一一对应;模型据此挑 templateKey)——
-const TEMPLATE_NAMES_ZH = ["把 sentence: basic","把 + 在/到 + place","把 + 给","把 + 成/作","Negation before 把","Passive 被","Passive 被 without doer","Passive 让/叫","Negation before 被","是…的: time","是…的: place","是…的: means","Result complement 完","Result complement 到","Result complement 见","Result complement 懂","Result complement 好","Result complement 错","Result complement 会","Negation 没 + V + complement","Direction complement 来/去","Compound direction complement","Direction complement with place","Extended 起来","Extended 下去","Potential complement V得C","Potential complement V不C","Capacity 得下/不下","Degree complement 得很/极了","Duration complement","Frequency complement 次/遍","太…了","V + 一下","Modal 会 (skill)","Modal 会 (likelihood)","Modal 能","Modal 可以","Modal 要 (want/going to)","Modal 想","Modal 应该","Modal 得 děi","不用 (no need)","Modal 敢","Comparison 比","比 + degree","Equality 跟…一样","Negative comparison 没有","不比 (not more than)","越来越","越…越…","Superlative 最","Existential 有","Existential 是","Existential V着","Serial verbs 连动句","Pivotal 兼语句","Double objects","Time before verb","Location 在 + place + V","Measure word structure","Verbal measure 次/遍","Verb reduplication VV/V一V","Verb reduplication V了V","Adjective reduplication AABB","有点儿 vs 一点儿","Distance 离","因为…所以…","虽然…但是…","如果…就…","一…就…","先…再…","又…又…","一边…一边…","不但…而且…","只要…就…","除了…以外","连…都/也…","对…来说","跟/和…一起","为了…","不是…而是…","Completion 了","Change-of-state 了","Negation 没(有)","Experience 过","Negation 没…过","Continuing state 着","V1着 V2","Progressive 在/正在","Modification 的","Adverbial 地","Degree complement 得","Question particle 吗","Follow-up particle 呢","Suggestion particle 吧","Exclamation particle 啊","About to happen 快…了/要…了","Just now 刚/刚才","就 (earlier than expected)","才 (later than expected)","再 vs 又","Yes/no question 吗","A-not-A question","Question word 什么","Question word 谁","Question words 哪儿/哪里","Question word 怎么","Question words 几/多少","How + adjective 多","V过没有 question","Adjective predicate 很"];
+const TEMPLATE_NAMES_ZH = ["把 sentence: basic","把 + 在/到 + place","把 + 给","把 + 成/作","Negation before 把","Passive 被","Passive 被 without doer","Passive 让/叫","Negation before 被","是…的: time","是…的: place","是…的: means","Result complement 完","Result complement 到","Result complement 见","Result complement 懂","Result complement 好","Result complement 错","Result complement 会","Negation 没 + V + complement","Direction complement 来/去","Compound direction complement","Direction complement with place","Extended 起来","Extended 下去","Potential complement V得C","Potential complement V不C","Capacity 得下/不下","Degree complement 得很/极了","Duration complement","Frequency complement 次/遍","太…了","V + 一下","Modal 会 (skill)","Modal 会 (likelihood)","Modal 能","Modal 可以","Modal 要 (want/going to)","Modal 想","Modal 应该","Modal 得 děi","不用 (no need)","Modal 敢","Comparison 比","比 + degree","Equality 跟…一样","Negative comparison 没有","不比 (not more than)","越来越","越…越…","Superlative 最","Existential 有","Existential 是","Existential V着","Serial verbs 连动句","Pivotal 兼语句","Double objects","Time before verb","Location 在 + place + V","Measure word structure","Verbal measure 次/遍","Verb reduplication VV/V一V","Verb reduplication V了V","Adjective reduplication AABB","有点儿 vs 一点儿","Distance 离","因为…所以…","虽然…但是…","如果…就…","一…就…","先…再…","又…又…","一边…一边…","不但…而且…","只要…就…","除了…以外","连…都/也…","对…来说","跟/和…一起","为了…","不是…而是…","Completion 了","Change-of-state 了","Negation 没(有)","Experience 过","Negation 没…过","Continuing state 着","V1着 V2","Progressive 在/正在","Modification 的","Adverbial 地","Degree complement 得","Question particle 吗","Follow-up particle 呢","Suggestion particle 吧","Exclamation particle 啊","About to happen 快…了/要…了","Just now 刚/刚才","就 (earlier than expected)","才 (later than expected)","再 vs 又","Yes/no question 吗","A-not-A question","Question word 什么","Question word 谁","Question words 哪儿/哪里","Question word 怎么","Question words 几/多少","How + adjective 多","V过没有 question","Adjective predicate 很","既…又…","Alternative question 还是"];
 const TEMPLATE_ENUM_ZH = ["", ...TEMPLATE_NAMES_ZH];
 
 // —— 风格描述(中文语体)——
@@ -1233,7 +1233,9 @@ const G_RULES = [
   { tpl: "把 sentence: basic", detect: /把[^，。？！]/, trig: "把" },
   { tpl: "Passive 被",        detect: /被/, trig: "被" },
   { tpl: "Pivotal 兼语句",    detect: /(?:让|讓|叫|使|请|請)[我你他她它人們们大家咱您学學生孩子父母老師师同弟妹哥姐爸妈媽爷奶儿兒女客朋友员員工者位先小]/, trig: "让" },
-  { tpl: "是…的: time",       detect: /是[^，。的]{0,10}(?:来|來|去|买|買|做|学|學|写|寫|说|說|看|坐|开|開|走|发生|發生|见|見|认识|認識|到|回|出生|完成|结婚|結婚|花)[^，。]{0,4}的/, trig: "是…的" },
+  { tpl: "是…的: place",      detect: /是(?:在|从|從)[^，。]{1,10}(?:来|來|去|学|學|买|買|做|见|見|认识|認識|发生|發生|出生|工作)[^，。]{0,3}的/, trig: "是…的" },
+  { tpl: "是…的: means",      detect: /是(?:坐|用|通过|通過|靠|骑|騎|开|開|走路|打车|打車)[^，。]{1,8}(?:来|來|去|到)[^，。]{0,3}的/, trig: "是…的" },
+  { tpl: "是…的: time",       detect: /是(?:昨天|今天|前天|去年|上周|上週|上个月|上個月|刚才|剛才|早上|晚上|[0-9一二三四五六七八九十]+(?:点|點|年|月|日|号|號))[^，。]{0,8}(?:来|來|去|到|学|學|买|買|做|见|見|完成|发生|發生)[^，。]{0,3}的/, trig: "是…的" },
   { tpl: "Existential 有",    detect: /(?:这里|那里|這裡|那裡|附近|上面|里面|裡面|外面|旁边|旁邊)[^，。]{0,4}有/, trig: "有" },
   // —— 补语:结果 ——
   { tpl: "Result complement 完", detect: /(?:做|吃|看|写|寫|读|讀|用|花|喝|听|聽|说|說|学|學)完/, trig: "完" },
@@ -1243,9 +1245,9 @@ const G_RULES = [
   // —— 补语:趋向 ——
   { tpl: "Extended 起来", detect: /起来|起來/, trig: "起来" },
   { tpl: "Extended 下去", detect: /下去/, trig: "下去" },
-  { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)/, trig: "来/去" },
+  { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)|(?:跑|走|拿|带|帶|搬|飞|飛|冲|衝|流|退|逃|寄|递|遞|扔|放)(?:出|进|進|上|下|回|过|過)(?:了|去|来|來|$)|(?:走|跑|拿|搬)(?:出|进|進|回|上|下)/, trig: "来/去" },
   // —— 补语:可能 ——
-  { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過)/, trig: "不" },
+  { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/, trig: "不" },
   { tpl: "Potential complement V得C", detect: /[一-龥]得(?:了|下|动|動|完|起|来|來|见|見|懂|到|上)/, trig: "得" },
   // —— 补语:时长/动量 ——
   { tpl: "Duration complement", detect: /(?:了|过|過)?[一二三四五六七八九十两兩几幾半0-9]+(?:年|个月|個月|天|小时|小時|分钟|分鐘|周|週|星期|个小时|個小時)/, trig: "时长" },
@@ -1253,7 +1255,8 @@ const G_RULES = [
   // —— 量词 ——
   { tpl: "Measure word structure", detect: /[一二三四五六七八九十两兩几幾半0-9]\s?(?:个|個|本|张|張|只|隻|条|條|件|位|杯|瓶|部|台|块|塊|朵|份|间|間|棵|颗|顆|支|首|场|場|页|頁|双|雙|对|對|碗|盘|盤|辆|輛|篇|封|头|頭|匹|群|束|串)/, trig: "量词" },
   // —— 能愿 ——
-  { tpl: "Modal 会 (skill)", detect: /会说|会写|会做|会开|会游|会弹|會說|會寫|會[^，。]{0,3}(?:语|話|车)|会[一-龥]/, trig: "会" },
+  { tpl: "Modal 会 (skill)", detect: /(?:会|會)(?:说|說|写|寫|做|开车|開車|游泳|弹|彈|唱|画|畫|骑|騎|开|開)|(?:会|會)[^，。]{0,3}(?:语|語|中文|外语|外語)/, trig: "会" },
+  { tpl: "Modal 会 (likelihood)", detect: /(?:会|會)(?:去|来|來|下雨|成功|迟到|遲到|答应|答應|同意|发生|發生|变|變|死|赢|贏|输|輸|结束|結束|开始|開始|回来|回來|再)/, trig: "会" },
   { tpl: "Modal 能", detect: /(?:^|[^可])能[一-龥]/, trig: "能" },
   { tpl: "Modal 可以", detect: /可以/, trig: "可以" },
   { tpl: "Modal 想", detect: /(?:^|[我你他她们們])想[一-龥]/, trig: "想" },
@@ -1262,7 +1265,7 @@ const G_RULES = [
   { tpl: "不用 (no need)", detect: /不用[一-龥]/, trig: "不用" },
   // —— 比较 ——
   { tpl: "越来越", detect: /越来越|越來越/, trig: "越来越" },
-  { tpl: "越…越…", detect: /越[^。！？]{1,6}越/, trig: "越" },
+  { tpl: "越…越…", detect: /越(?!来|來)[^。！？]{1,6}越/, trig: "越" },
   { tpl: "Comparison 比", detect: /[一-龥]比[一-龥]/, trig: "比" },
   { tpl: "Equality 跟…一样", detect: /(?:跟|和|与|與)[^，。]{1,8}一样|一樣/, trig: "一样" },
   { tpl: "Negative comparison 没有", detect: /没有[^，。]{1,8}(?:那么|這么|这么|那麼|高|大|好|多|重)/, trig: "没有" },
@@ -1276,6 +1279,7 @@ const G_RULES = [
   { tpl: "Adverbial 地", detect: /[一-龥]地[一-龥]/, trig: "地" },
   { tpl: "Degree complement 得", detect: /[一-龥]得[一-龥]/, trig: "得" },
   // —— 疑问 ——
+  { tpl: "Alternative question 还是", detect: /还是[^。]{0,10}[？?]|[一-龥]还是[一-龥]/, trig: "还是" },
   { tpl: "Yes/no question 吗", detect: /吗|嗎/, trig: "吗" },
   { tpl: "Follow-up particle 呢", detect: /呢[？。]?$|呢？/, trig: "呢" },
   { tpl: "Suggestion particle 吧", detect: /吧[？。！]?$|吧！/, trig: "吧" },
@@ -1290,7 +1294,8 @@ const G_RULES = [
   { tpl: "因为…所以…", detect: /因为|因為/, trig: "因为" },
   { tpl: "虽然…但是…", detect: /虽然|雖然/, trig: "虽然" },
   { tpl: "如果…就…", detect: /如果|要是/, trig: "如果" },
-  { tpl: "又…又…", detect: /又[^，。]{1,6}又|既[^，。]{1,8}又/, trig: "又" },
+  { tpl: "既…又…", detect: /既[^。！？]{1,10}又/, trig: "既" },
+  { tpl: "又…又…", detect: /又[^，。]{1,6}又/, trig: "又" },
   { tpl: "不但…而且…", detect: /(?:不但|不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不但" },
   { tpl: "一…就…", detect: /一[^。！？]{1,10}就/, trig: "一…就" },
   { tpl: "先…再…", detect: /先[一-龥]{1,8}再/, trig: "先…再" },
@@ -1300,7 +1305,7 @@ const G_RULES = [
   { tpl: "连…都/也…", detect: /连[^，。]{1,8}(?:都|也)|連[^，。]{1,8}(?:都|也)/, trig: "连" },
   { tpl: "为了…", detect: /^为了|^為了|，为了|，為了/, trig: "为了" },
   // —— 重叠 ——
-  { tpl: "Adjective predicate 很", detect: /(?<![不也還还])很(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏臟乱亂静靜]/, trig: "很" },
+  { tpl: "Adjective predicate 很", detect: /(?:(?<![不也還还])很|非常|特别|特別|十分|挺|真)(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏臟乱亂静靜棒帅]/, trig: "很" },
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
   // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
@@ -1309,8 +1314,8 @@ const G_RULES = [
   // —— 了(模型基本都给,只校验) ——
   { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
   { tpl: "Change-of-state 了", detect: /了[。！？]?$|了！/, trig: "了", noAdd: true },
-  { tpl: "Location 在 + place + V", detect: /在[一-龥]{1,4}(?:里|裡|上|下|中|家|外|边|邊|工作|学习|學習)/, trig: "在", noAdd: true },
-  { tpl: "Negation 没 + V + complement", detect: /没[一-龥]|沒[一-龥]/, trig: "没", noAdd: true },
+  { tpl: "Location 在 + place + V", detect: /(?<![站坐躺住放挂掛趴靠摆擺现現正])在[一-龥]{1,5}(?:看|工作|学习|學習|上班|上课|上課|吃|睡|玩|住|等|做|开会|開會|买|買|读|讀|写|寫|听|聽|运动|運動|锻炼|鍛煉|见面|見面|休息)/, trig: "在" },
+  { tpl: "Negation 没 + V + complement", detect: /没[一-龥](?:完|到|懂|见|見|好|错|錯|上|下|出|回|过|過|清|住|够|夠|起来|下去|出来|出來)|沒[一-龥](?:完|到|懂|見|好|錯|清|住)/, trig: "没", noAdd: true },
   { tpl: "Negation 没(有)", detect: /没|沒/, trig: "没", noAdd: true },
   { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时(?!间)|有時(?!間)|偶尔|偶爾/, trig: "时间语序" },
 ];
@@ -1424,7 +1429,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.20", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.21", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
