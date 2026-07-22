@@ -1243,10 +1243,11 @@ const G_RULES = [
   { tpl: "Result complement 懂", detect: /(?:听|聽|看|读|讀)懂/, trig: "懂" },
   { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)见|見/, trig: "见" },
   // —— 补语:趋向 ——
-  { tpl: "Extended 起来", detect: /起来|起來/, trig: "起来" },
+  { tpl: "Compound direction complement", detect: /(?:站|坐|跳|拿|举|舉|抬|爬|飞|飛|升|捡|撿|扶|抱|提)(?:了|一)?(?:起来|起來)/, trig: "起来" },
+  { tpl: "Extended 起来", detect: /(?:笑|哭|想|唱|说|說|聊|忙|干|幹|做|暖和|热闹|熱鬧|兴奋|興奮|激动|激動|回忆|回憶|讨论|討論|下雨|响|響)(?:了|一)?(?:起来|起來)|(?:看|听|聽|吃|闻|聞)起来/, trig: "起来" },
   { tpl: "Extended 下去", detect: /下去/, trig: "下去" },
   { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)/, trig: "来/去" },
-  { tpl: "Direction complement with place", detect: /(?:跑|走|拿|带|帶|搬|飞|飛|冲|衝|退|逃|寄|递|遞|扔|放|开|開|拉|送|抬)(?:出|进|進|回|上|下)(?:了)?[一-龥]{1,4}(?:房间|房間|门|門|里|裡|外|楼|樓|学校|學校|家|room|城|国|國|来|來|去)|(?:跑|走|冲|衝)(?:出|进|進|回)(?:了)?[一-龥]/, trig: "趋向" },
+  { tpl: "Direction complement with place", detect: /(?:回|进|進|出|上|下|过|過)[一-龥]{1,4}(?:来|去|來)/, trig: "趋向" },
   // —— 补语:可能 ——
   { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/, trig: "不" },
   { tpl: "Potential complement V得C", detect: /[一-龥]得(?:了|下|动|動|完|起|来|來|见|見|懂|到|上)/, trig: "得" },
@@ -1294,7 +1295,7 @@ const G_RULES = [
   { tpl: "一边…一边…", detect: /一?[边邊][^，。]{1,6}一?[边邊]/, trig: "一边" },
   { tpl: "因为…所以…", detect: /因为|因為/, trig: "因为" },
   { tpl: "虽然…但是…", detect: /虽然|雖然/, trig: "虽然" },
-  { tpl: "如果…就…", detect: /(?:如果|要是|假如|倘若)[^。！？]{0,20}就/, trig: "如果" },
+  { tpl: "如果…就…", detect: /如果|要是|假如|倘若/, trig: "如果" },
   { tpl: "既…又…", detect: /既[^。！？]{1,10}又/, trig: "既" },
   { tpl: "又…又…", detect: /又[^，。]{1,6}又/, trig: "又" },
   { tpl: "不但…而且…", detect: /(?:不但|不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不但" },
@@ -1310,12 +1311,12 @@ const G_RULES = [
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
   // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
-  { tpl: "Serial verbs 连动句", detect: /(?:站|坐|躺|趴|靠|蹲|跪)在[一-龥]{1,4}(?:看|听|聽|吃|喝|读|讀|写|寫|玩|做|说|說|等|想|休息|工作|学习|學習)/, trig: "连动" },
+  { tpl: "Serial verbs 连动句", detect: /(?:站|坐|躺|趴|靠|蹲|跪)在[一-龥]{1,4}(?:看|听|聽|吃|喝|读|讀|写|寫|玩|做|说|說|等|想|休息|工作)|(?:去|来|來)[一-龥]{1,4}(?:买|買|吃|喝|看|玩|找|见|見|办|辦|拿|取|学|學|上课|上課|工作|做|参加|參加|旅游|旅遊)/, trig: "连动" },
   { tpl: "Double objects", detect: /(?:给|給|送|教|问|問|告诉|告訴|递|遞|借|还|還)(?:了|给|給)?[我你他她您它们們人][一-龥]/, trig: "双宾" },
   // —— 了(模型基本都给,只校验) ——
   { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
   { tpl: "Change-of-state 了", detect: /了[。！？]?$|了！/, trig: "了", noAdd: true },
-  { tpl: "Location 在 + place + V", detect: /(?<![站坐躺住放挂掛趴靠摆擺现現正])在[一-龥]{1,5}(?:看|工作|学习|學習|上班|上课|上課|吃|睡|玩|住|等|做|开会|開會|买|買|读|讀|写|寫|听|聽|运动|運動|锻炼|鍛煉|见面|見面|休息)/, trig: "在" },
+  { tpl: "Location 在 + place + V", detect: /(?<![站坐躺住放挂掛趴靠摆擺现現正])在[一-龥]{1,5}(?:看|工作|学习|學習|上班|上课|上課|吃|睡|玩|住|等|做|开会|開會|买|買|读|讀|写|寫|听|聽|运动|運動|锻炼|鍛煉|见面|見面|休息|拍照|拍|散步|唱歌|跳舞|聊天|上网|上網|打球|画|畫|游泳|做饭|做飯)/, trig: "在" },
   { tpl: "Negation 没 + V + complement", detect: /没[一-龥](?:完|到|懂|见|見|好|错|錯|上|下|出|回|过|過|清|住|够|夠|起来|下去|出来|出來)|沒[一-龥](?:完|到|懂|見|好|錯|清|住)/, trig: "没", noAdd: true },
   { tpl: "Negation 没(有)", detect: /没|沒/, trig: "没", noAdd: true },
   { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时(?!间)|有時(?!間)|偶尔|偶爾/, trig: "时间语序" },
@@ -1325,9 +1326,7 @@ const G_BY_TPL = new Map(G_RULES.map(r => [r.tpl, r]));
 const G_FAMILY = {
   "把 + 在/到 + place": "把 sentence: basic", "把 + 给": "把 sentence: basic", "把 + 成/作": "把 sentence: basic", "Negation before 把": "把 sentence: basic",
   "Passive 被 without doer": "Passive 被", "Passive 让/叫": "Pivotal 兼语句", "Negation before 被": "Passive 被",
-  "是…的: place": "是…的: time", "是…的: means": "是…的: time",
-  "Compound direction complement": "Direction complement 来/去", "Direction complement with place": "Direction complement 来/去",
-  "Modal 会 (likelihood)": "Modal 会 (skill)", "Modal 要 (want/going to)": "Modal 要 (want/going to)",
+  "Modal 要 (want/going to)": "Modal 要 (want/going to)",
   "比 + degree": "Comparison 比", "不比 (not more than)": "Comparison 比",
   "Negation 没…过": "Experience 过", "V1着 V2": "Continuing state 着", "Existential V着": "Continuing state 着",
   "Question particle 吗": "Yes/no question 吗", "V过没有 question": "A-not-A question",
@@ -1430,7 +1429,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.22", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.23", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
