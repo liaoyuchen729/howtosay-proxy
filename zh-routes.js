@@ -1232,7 +1232,7 @@ const G_RULES = [
   // —— 句式 ——
   { tpl: "把 sentence: basic", detect: /把[^，。？！]/, trig: "把" },
   { tpl: "Passive 被",        detect: /被/, trig: "被" },
-  { tpl: "Pivotal 兼语句",    detect: /(让|讓|叫|使|请|請)[我你他她它人们們大家咱您学學孩父母老师師同]/, trig: "让" },
+  { tpl: "Pivotal 兼语句",    detect: /(?:让|讓|叫|使|请|請)[我你他她它人們们大家咱您学學生孩子父母老師师同弟妹哥姐爸妈媽爷奶儿兒女客朋友员員工者位先小]/, trig: "让" },
   { tpl: "是…的: time",       detect: /是[^，。的]{0,10}(?:来|來|去|买|買|做|学|學|写|寫|说|說|看|坐|开|開|走|发生|發生|见|見|认识|認識|到|回|出生|完成|结婚|結婚|花)[^，。]{0,4}的/, trig: "是…的" },
   { tpl: "Existential 有",    detect: /(?:这里|那里|這裡|那裡|附近|上面|里面|裡面|外面|旁边|旁邊)[^，。]{0,4}有/, trig: "有" },
   // —— 补语:结果 ——
@@ -1251,7 +1251,7 @@ const G_RULES = [
   { tpl: "Duration complement", detect: /(?:了|过|過)?[一二三四五六七八九十两兩几幾半0-9]+(?:年|个月|個月|天|小时|小時|分钟|分鐘|周|週|星期|个小时|個小時)/, trig: "时长" },
   { tpl: "Frequency complement 次/遍", detect: /[二三四五六七八九十两兩几幾0-9]+(?:次|遍|趟)|[一](?:次|遍|趟)(?![到家])/, trig: "次/遍" },
   // —— 量词 ——
-  { tpl: "Measure word structure", detect: /[一二三四五六七八九十两兩几幾这那這那每半0-9]\s?(?:个|個|本|张|張|只|隻|条|條|件|位|杯|瓶|部|台|块|塊|朵|份|间|間|棵|颗|顆|支|首|场|場|页|頁|双|雙|对|對|碗|盘|盤|辆|輛|篇|封|头|頭|匹|群|束|串)/, trig: "量词" },
+  { tpl: "Measure word structure", detect: /[一二三四五六七八九十两兩几幾半0-9]\s?(?:个|個|本|张|張|只|隻|条|條|件|位|杯|瓶|部|台|块|塊|朵|份|间|間|棵|颗|顆|支|首|场|場|页|頁|双|雙|对|對|碗|盘|盤|辆|輛|篇|封|头|頭|匹|群|束|串)/, trig: "量词" },
   // —— 能愿 ——
   { tpl: "Modal 会 (skill)", detect: /会说|会写|会做|会开|会游|会弹|會說|會寫|會[^，。]{0,3}(?:语|話|车)|会[一-龥]/, trig: "会" },
   { tpl: "Modal 能", detect: /(?:^|[^可])能[一-龥]/, trig: "能" },
@@ -1267,9 +1267,10 @@ const G_RULES = [
   { tpl: "Equality 跟…一样", detect: /(?:跟|和|与|與)[^，。]{1,8}一样|一樣/, trig: "一样" },
   { tpl: "Negative comparison 没有", detect: /没有[^，。]{1,8}(?:那么|這么|这么|那麼|高|大|好|多|重)/, trig: "没有" },
   { tpl: "Superlative 最", detect: /最[一-龥]/, trig: "最" },
+  { tpl: "Distance 离", detect: /离[一-龥]{1,6}(?:很|不|太|近|远|遠|有)/, trig: "离" },
   // —— 体标记 ——
   { tpl: "Experience 过", detect: /[一-龥]过(?![来來去程分度])(?=[了吗嗎？。！，]|$|[一-龥])/, trig: "过" },
-  { tpl: "Continuing state 着", detect: /(?:开|開|关|關|穿|戴|拿|坐|站|躺|挂|掛|放|带|帶)着/, trig: "着" },
+  { tpl: "Continuing state 着", detect: /(?:开|開|关|關|穿|戴|拿|坐|站|躺|挂|掛|放|带|帶|睡|看|听|聽|记|記|留|等|亮|笑|哭|抱|举|舉|низ|锁|鎖)着/, trig: "着" },
   { tpl: "Progressive 在/正在", detect: /正在/, trig: "正在" },
   // —— 助词 ——
   { tpl: "Adverbial 地", detect: /[一-龥]地[一-龥]/, trig: "地" },
@@ -1309,6 +1310,8 @@ const G_RULES = [
   { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
   { tpl: "Change-of-state 了", detect: /了[。！？]?$|了！/, trig: "了", noAdd: true },
   { tpl: "Location 在 + place + V", detect: /在[一-龥]{1,4}(?:里|裡|上|下|中|家|外|边|邊|工作|学习|學習)/, trig: "在", noAdd: true },
+  { tpl: "Negation 没 + V + complement", detect: /没[一-龥]|沒[一-龥]/, trig: "没", noAdd: true },
+  { tpl: "Negation 没(有)", detect: /没|沒/, trig: "没", noAdd: true },
   { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时(?!间)|有時(?!間)|偶尔|偶爾/, trig: "时间语序" },
 ];
 const G_BY_TPL = new Map(G_RULES.map(r => [r.tpl, r]));
@@ -1421,7 +1424,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.19", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.20", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
