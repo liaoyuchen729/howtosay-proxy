@@ -1245,7 +1245,8 @@ const G_RULES = [
   // —— 补语:趋向 ——
   { tpl: "Extended 起来", detect: /起来|起來/, trig: "起来" },
   { tpl: "Extended 下去", detect: /下去/, trig: "下去" },
-  { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)|(?:跑|走|拿|带|帶|搬|飞|飛|冲|衝|流|退|逃|寄|递|遞|扔|放)(?:出|进|進|上|下|回|过|過)(?:了|去|来|來|$)|(?:走|跑|拿|搬)(?:出|进|進|回|上|下)/, trig: "来/去" },
+  { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)/, trig: "来/去" },
+  { tpl: "Direction complement with place", detect: /(?:跑|走|拿|带|帶|搬|飞|飛|冲|衝|退|逃|寄|递|遞|扔|放|开|開|拉|送|抬)(?:出|进|進|回|上|下)(?:了)?[一-龥]{1,4}(?:房间|房間|门|門|里|裡|外|楼|樓|学校|學校|家|room|城|国|國|来|來|去)|(?:跑|走|冲|衝)(?:出|进|進|回)(?:了)?[一-龥]/, trig: "趋向" },
   // —— 补语:可能 ——
   { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/, trig: "不" },
   { tpl: "Potential complement V得C", detect: /[一-龥]得(?:了|下|动|動|完|起|来|來|见|見|懂|到|上)/, trig: "得" },
@@ -1293,7 +1294,7 @@ const G_RULES = [
   { tpl: "一边…一边…", detect: /一?[边邊][^，。]{1,6}一?[边邊]/, trig: "一边" },
   { tpl: "因为…所以…", detect: /因为|因為/, trig: "因为" },
   { tpl: "虽然…但是…", detect: /虽然|雖然/, trig: "虽然" },
-  { tpl: "如果…就…", detect: /如果|要是/, trig: "如果" },
+  { tpl: "如果…就…", detect: /(?:如果|要是|假如|倘若)[^。！？]{0,20}就/, trig: "如果" },
   { tpl: "既…又…", detect: /既[^。！？]{1,10}又/, trig: "既" },
   { tpl: "又…又…", detect: /又[^，。]{1,6}又/, trig: "又" },
   { tpl: "不但…而且…", detect: /(?:不但|不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不但" },
@@ -1309,7 +1310,7 @@ const G_RULES = [
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
   // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
-  { tpl: "Serial verbs 连动句", detect: /./, trig: "连动", noAdd: true },
+  { tpl: "Serial verbs 连动句", detect: /(?:站|坐|躺|趴|靠|蹲|跪)在[一-龥]{1,4}(?:看|听|聽|吃|喝|读|讀|写|寫|玩|做|说|說|等|想|休息|工作|学习|學習)/, trig: "连动" },
   { tpl: "Double objects", detect: /(?:给|給|送|教|问|問|告诉|告訴|递|遞|借|还|還)(?:了|给|給)?[我你他她您它们們人][一-龥]/, trig: "双宾" },
   // —— 了(模型基本都给,只校验) ——
   { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
@@ -1429,7 +1430,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.21", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.22", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
