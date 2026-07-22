@@ -1298,6 +1298,19 @@ function correctGrammarPoints(points, translation) {
     { re: /又…又/, need: /又.{1,6}又|既.{1,8}又/ }, { re: /不但…而且/, need: /不但|不僅|不仅|而且/ },
     { re: /除了…以外/, need: /除了/ }, { re: /不是…而是/, need: /不是.{1,10}而是/ },
     { re: /只要…就/, need: /只要/ }, { re: /是…的/, need: /是.{0,12}的/ },
+    { re: /Extended 起来/, need: /起来|起來/ }, { re: /Extended 下去/, need: /下去/ },
+    { re: /Location 在|在 \+ place/, need: /在/ },
+    { re: /Time before verb/, need: /每天|昨天|明天|今天|现在|現在|以前|以后|以後|时候|時候|早上|晚上|上午|下午|点|點|号|號/ },
+    { re: /Direction complement 来\/去|Compound direction/, need: /来|去|來|上|下|进|出|回|过|起/ },
+    { re: /Result complement 完/, need: /完/ }, { re: /Result complement 到/, need: /到/ },
+    { re: /Result complement 见/, need: /见|見/ }, { re: /Result complement 懂/, need: /懂/ },
+    { re: /Result complement 好/, need: /好/ }, { re: /Result complement 错/, need: /错|錯/ },
+    { re: /Potential complement V得C/, need: /得/ }, { re: /Potential complement V不C/, need: /不/ },
+    { re: /Modal 会/, need: /会|會/ }, { re: /Modal 能/, need: /能/ }, { re: /Modal 可以/, need: /可以/ },
+    { re: /Modal 要/, need: /要/ }, { re: /Modal 想/, need: /想/ }, { re: /Modal 应该/, need: /应该|應該/ },
+    { re: /一…就/, need: /一.{1,8}就/ }, { re: /先…再/, need: /先.{1,8}再/ },
+    { re: /Question particle 吗/, need: /吗|嗎/ }, { re: /Follow-up particle 呢/, need: /呢/ },
+    { re: /Suggestion particle 吧/, need: /吧/ }, { re: /连…都\/也/, need: /连|連/ },
   ];
   const validated = out.filter(pt => {
     const rule = SIG.find(s => s.re.test(pt.name));
@@ -1375,7 +1388,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.16", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.17", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
