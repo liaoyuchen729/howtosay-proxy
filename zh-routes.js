@@ -367,6 +367,25 @@ function fixupZhAlignment(sourceText, words, srcLang) {
         }
       }
     }
+    // ⑪ 同形/异体汉字兜底:空着的实词块,若其汉字在原文里原样出现(運動←運動),或
+    //    是常见中日异体词(聯絡←連絡),则对齐。只补空块,claim-once 兜底防重复。
+    // 只列「中日不同形」的常见词(同形词由上面的同形检测处理)
+    const JA_ZH_VARIANT = {
+      "聯絡": "連絡", "联络": "連絡", "聯繫": "連絡", "联系": "連絡",
+      "對應": "対応", "对应": "対応", "經濟": "経済", "经济": "経済",
+      "廣告": "広告", "广告": "広告", "藝術": "芸術", "艺术": "芸術",
+      "團體": "団体", "团体": "団体", "醫院": "病院", "医院": "病院"
+    };
+    for (const w of ws) {
+      if (w.sourceSpan || !["noun", "verb", "adjective"].includes(w.partOfSpeech)) continue;
+      const cjk = w.chinese.replace(/[^\u4E00-\u9FFF]/g, "");
+      if (cjk.length >= 2 && sourceText.includes(cjk) &&
+          !ws.some(x => x !== w && x.sourceSpan && x.sourceSpan.includes(cjk))) {
+        w.sourceSpan = cjk; continue;                         // 同形汉字(運動←運動)
+      }
+      const v = JA_ZH_VARIANT[w.chinese];                     // 异体词(聯絡←連絡)
+      if (v && sourceText.includes(v) && !ws.some(x => x !== w && x.sourceSpan === v)) w.sourceSpan = v;
+    }
   }
   if (srcLang === "Korean") {
     // 形态学单字助词剥离(共享):을/은 只接收音,를/는/가 只接元音,에/의/도/만 用词干下限
@@ -1204,26 +1223,52 @@ const STRUCT_TEMPLATES = [
   { marks: ["除了"], tpl: "除了…以外" },
   { marks: ["不是"], tpl: "不是…而是…" },   // 需搭配 而是,下面 correctGrammarPoints 会校验
 ];
+// 扫描译文找结构标记 → 对应模板(补全模型漏掉的语法点)。re 命中即认定该语法存在。
+const SCAN_MARKERS = [
+  { re: /把/, tpl: "把 sentence: basic", trig: "把" },
+  { re: /被/, tpl: "Passive 被", trig: "被" },
+  { re: /(让|讓|叫|使|请|請)[我你他她它人們们]/, tpl: "Pivotal 兼语句", trig: "让" },
+  { re: /一边[^，。]{0,6}一边|一邊[^，。]{0,6}一邊|(?<![旁上下里外这那前后左右两三])边[^，。]{1,6}边(?![界儿])|(?<![旁上下裡外這那前後左右兩三])邊[^，。]{1,6}邊(?![界兒])/, tpl: "一边…一边…", trig: "一边" },
+  { re: /既[^，。]{1,8}又/, tpl: "又…又…", trig: "既" },
+  { re: /又[^，。]{1,6}又/, tpl: "又…又…", trig: "又" },
+  { re: /越来越|越來越/, tpl: "越来越", trig: "越来越" },
+  { re: /越[^，。]{1,4}越/, tpl: "越…越…", trig: "越" },
+  { re: /因为|因為/, tpl: "因为…所以…", trig: "因为" },
+  { re: /虽然|雖然/, tpl: "虽然…但是…", trig: "虽然" },
+  { re: /如果[^，。]{1,10}就|如果/, tpl: "如果…就…", trig: "如果" },
+  { re: /不但|不僅|不仅/, tpl: "不但…而且…", trig: "不但" },
+  { re: /除了/, tpl: "除了…以外", trig: "除了" },
+  { re: /不是[^，。]{1,10}而是/, tpl: "不是…而是…", trig: "不是" },
+  { re: /只要/, tpl: "只要…就…", trig: "只要" },
+];
 function correctGrammarPoints(points, translation) {
   const out = [];
   for (const pt of points) {
     let name = pt.name, triggerWords = pt.triggerWords;
+    // ① 标记纠偏:触发词里有明确结构标记 → 强制正确模板
+    let matched = false;
     for (const { marks, tpl } of STRUCT_TEMPLATES) {
       const hit = pt.triggerWords.filter(w => marks.some(m => w === m || w.includes(m)));
       if (hit.length) {
-        // 「不是…而是…」须 而是 同现,否则跳过(不是 单独可能是否定,非该结构)
         if (tpl === "不是…而是…" && !pt.triggerWords.some(w => /而是/.test(w)) && !/而是/.test(translation)) continue;
-        name = tpl;
-        triggerWords = hit;   // 纠偏后只留匹配该结构的触发词,卡片不带无关词
-        break;
+        name = tpl; triggerWords = hit; matched = true; break;
       }
+    }
+    // ①b 边…边(不带一)correlative:触发词有 ≥2 个 边/邊 → 一边…一边…
+    if (!matched && pt.triggerWords.filter(w => /^[边邊]$/.test(w)).length >= 2) {
+      name = "一边…一边…"; triggerWords = pt.triggerWords.filter(w => /^[边邊]$/.test(w));
     }
     out.push({ name, triggerWords });
   }
-  // 白名单过滤:名字必须是 110 模板库里的合法模板(去除模型 name 兜底乱造的「感到/动词短语」)
+  // ② 扫描补全:译文里有结构标记但模型没列 → 补上语法点
   const KNOWN = new Set(TEMPLATE_NAMES_ZH);
+  const haveTpl = new Set(out.map(p => p.name));
+  for (const { re, tpl, trig } of SCAN_MARKERS) {
+    if (haveTpl.has(tpl)) continue;
+    if (re.test(translation)) { out.push({ name: tpl, triggerWords: [trig] }); haveTpl.add(tpl); }
+  }
+  // ③ 白名单过滤 + 同名去重 + 封顶 5 个(避免噪声)
   const kept = out.filter(pt => KNOWN.has(pt.name));
-  // 同名去重(纠偏后可能撞名):合并触发词,保留首次出现顺序
   const seen = new Map();
   for (const pt of kept) {
     if (seen.has(pt.name)) {
@@ -1233,7 +1278,7 @@ function correctGrammarPoints(points, translation) {
       seen.set(pt.name, { name: pt.name, triggerWords: [...pt.triggerWords] });
     }
   }
-  return [...seen.values()];
+  return [...seen.values()].slice(0, 5);
 }
 
 function mergeUnits(a, b, pos, sourceText) {
@@ -1294,7 +1339,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.12", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.13", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
