@@ -1195,6 +1195,14 @@ const STRUCT_TEMPLATES = [
   { marks: ["下去"], tpl: "Extended 下去" },
   { marks: ["越来越", "越來越"], tpl: "越来越" },
   { marks: ["过", "過"], tpl: "Experience 过" },
+  // 成对/关联结构(用「独特标记」作 key,避免误伤:又 单独≠又…又,须 既 触发)
+  { marks: ["既"], tpl: "又…又…" },              // 既…又…(既漂亮又温柔)≈ 又…又…
+  { marks: ["一边", "一邊"], tpl: "一边…一边…" },
+  { marks: ["虽然", "雖然"], tpl: "虽然…但是…" },
+  { marks: ["因为", "因為"], tpl: "因为…所以…" },
+  { marks: ["不但"], tpl: "不但…而且…" },
+  { marks: ["除了"], tpl: "除了…以外" },
+  { marks: ["不是"], tpl: "不是…而是…" },   // 需搭配 而是,下面 correctGrammarPoints 会校验
 ];
 function correctGrammarPoints(points, translation) {
   const out = [];
@@ -1203,6 +1211,8 @@ function correctGrammarPoints(points, translation) {
     for (const { marks, tpl } of STRUCT_TEMPLATES) {
       const hit = pt.triggerWords.filter(w => marks.some(m => w === m || w.includes(m)));
       if (hit.length) {
+        // 「不是…而是…」须 而是 同现,否则跳过(不是 单独可能是否定,非该结构)
+        if (tpl === "不是…而是…" && !pt.triggerWords.some(w => /而是/.test(w)) && !/而是/.test(translation)) continue;
         name = tpl;
         triggerWords = hit;   // 纠偏后只留匹配该结构的触发词,卡片不带无关词
         break;
@@ -1210,9 +1220,12 @@ function correctGrammarPoints(points, translation) {
     }
     out.push({ name, triggerWords });
   }
+  // 白名单过滤:名字必须是 110 模板库里的合法模板(去除模型 name 兜底乱造的「感到/动词短语」)
+  const KNOWN = new Set(TEMPLATE_NAMES_ZH);
+  const kept = out.filter(pt => KNOWN.has(pt.name));
   // 同名去重(纠偏后可能撞名):合并触发词,保留首次出现顺序
   const seen = new Map();
-  for (const pt of out) {
+  for (const pt of kept) {
     if (seen.has(pt.name)) {
       const ex = seen.get(pt.name);
       for (const w of pt.triggerWords) if (!ex.triggerWords.includes(w)) ex.triggerWords.push(w);
@@ -1281,7 +1294,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.10", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.11", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
