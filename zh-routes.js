@@ -1186,6 +1186,43 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   }
   return m2;
 }
+// 结构词 → 正确模板名(简繁双写)。优先级从上到下,取触发词里命中的第一个。
+const STRUCT_TEMPLATES = [
+  { marks: ["把"], tpl: "把 sentence: basic" },
+  { marks: ["被"], tpl: "Passive 被" },
+  { marks: ["让", "讓", "叫", "使", "请", "請"], tpl: "Pivotal 兼语句" },   // 使役兼语句(让我感到…)
+  { marks: ["起来", "起來"], tpl: "Extended 起来" },
+  { marks: ["下去"], tpl: "Extended 下去" },
+  { marks: ["越来越", "越來越"], tpl: "越来越" },
+  { marks: ["过", "過"], tpl: "Experience 过" },
+];
+function correctGrammarPoints(points, translation) {
+  const out = [];
+  for (const pt of points) {
+    let name = pt.name, triggerWords = pt.triggerWords;
+    for (const { marks, tpl } of STRUCT_TEMPLATES) {
+      const hit = pt.triggerWords.filter(w => marks.some(m => w === m || w.includes(m)));
+      if (hit.length) {
+        name = tpl;
+        triggerWords = hit;   // 纠偏后只留匹配该结构的触发词,卡片不带无关词
+        break;
+      }
+    }
+    out.push({ name, triggerWords });
+  }
+  // 同名去重(纠偏后可能撞名):合并触发词,保留首次出现顺序
+  const seen = new Map();
+  for (const pt of out) {
+    if (seen.has(pt.name)) {
+      const ex = seen.get(pt.name);
+      for (const w of pt.triggerWords) if (!ex.triggerWords.includes(w)) ex.triggerWords.push(w);
+    } else {
+      seen.set(pt.name, { name: pt.name, triggerWords: [...pt.triggerWords] });
+    }
+  }
+  return [...seen.values()];
+}
+
 function mergeUnits(a, b, pos, sourceText) {
   // 双方都有独立 span 且原文相邻(ba quyển / 空格或直连)→ 合并 span 一起带上
   let span = a.sourceSpan || b.sourceSpan || "";
@@ -1244,7 +1281,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.9.1", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.10", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1305,10 +1342,14 @@ export function mountZhRoutes(app, deps) {
       // 词对齐确定性修正(去幻觉/剥助词/合并/去重)—— 见 fixupZhAlignment
       const words = fixupZhAlignment(sourceText, parsed.words || [], sourceLanguage);
       // grammarPoints: templateKey 命中就用它当 name(App 据 name 查本地模板)
-      const grammarPoints = (parsed.grammarPoints || []).map(g => ({
+      let grammarPoints = (parsed.grammarPoints || []).map(g => ({
         name: g.templateKey && g.templateKey.length ? g.templateKey : (g.name || ""),
         triggerWords: g.triggerWords || []
       })).filter(g => g.name);
+      // ——— 结构词纠偏:模型常把触发词配到无关模板(讓→把字句/Extended 起来)———
+      // 触发词里出现明确结构标记时,强制模板名与之一致(不管模型返回什么),
+      // 保证「详解讲的语法」「例句」和「句子里那个字」严格对应。
+      grammarPoints = correctGrammarPoints(grammarPoints, parsed.translation || "");
       res.json({ translation: parsed.translation, words, grammarPoints, ...(rawWords ? { rawWords } : {}) });
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
   });
