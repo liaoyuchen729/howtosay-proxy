@@ -1299,7 +1299,7 @@ const G_RULES = [
   { tpl: "连…都/也…", detect: /连[^，。]{1,8}(?:都|也)|連[^，。]{1,8}(?:都|也)/, trig: "连" },
   { tpl: "为了…", detect: /^为了|^為了|，为了|，為了/, trig: "为了" },
   // —— 重叠 ——
-  { tpl: "Adjective predicate 很", detect: /(?:^|[我你他她它们們人这那這這名個个])很(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴便宜胖瘦难難易甜苦辣咸鹹香臭亮暗新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困乏舒服开心開心紧张緊張]/, trig: "很" },
+  { tpl: "Adjective predicate 很", detect: /(?<![不也還还])很(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏臟乱亂静靜]/, trig: "很" },
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
   // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
@@ -1309,7 +1309,7 @@ const G_RULES = [
   { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
   { tpl: "Change-of-state 了", detect: /了[。！？]?$|了！/, trig: "了", noAdd: true },
   { tpl: "Location 在 + place + V", detect: /在[一-龥]{1,4}(?:里|裡|上|下|中|家|外|边|邊|工作|学习|學習)/, trig: "在", noAdd: true },
-  { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时|有時|偶尔|偶爾/, trig: "时间语序" },
+  { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时(?!间)|有時(?!間)|偶尔|偶爾/, trig: "时间语序" },
 ];
 const G_BY_TPL = new Map(G_RULES.map(r => [r.tpl, r]));
 // 家族别名:模型返回的变体名 → 归一到规则表里的代表名(共享 detect)
@@ -1421,7 +1421,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.18", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.19", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
