@@ -1285,8 +1285,26 @@ function correctGrammarPoints(points, translation) {
     if (haveTpl.has(tpl)) continue;
     if (re.test(translation)) { out.push({ name: tpl, triggerWords: [trig] }); haveTpl.add(tpl); }
   }
-  // ③ 白名单过滤 + 同名去重 + 封顶 5 个(避免噪声)
-  const kept = out.filter(pt => KNOWN.has(pt.name));
+  // ③ 签名字校验:模板要求的标志字在译文里不存在 → 该语法点是模型幻觉,丢掉(地←没有地)
+  const SIG = [
+    { re: /^Adverbial 地/, need: /地/ }, { re: /^Modification 的/, need: /的/ },
+    { re: /^Degree complement 得|得很|极了/, need: /得/ }, { re: /把/, need: /把/ },
+    { re: /Passive 被|^Negation before 被/, need: /被/ }, { re: /了$|Completion 了|Change-of-state 了/, need: /了/ },
+    { re: /Experience 过|没…过|过没有/, need: /过|過/ }, { re: /Continuing state 着|V1着/, need: /着/ },
+    { re: /Comparison 比|比 \+|不比/, need: /比/ }, { re: /越来越/, need: /越来越|越來越/ },
+    { re: /越…越/, need: /越.{1,4}越/ }, { re: /Pivotal 兼语句|Passive 让\/叫/, need: /让|讓|叫|使|请|請/ },
+    { re: /一边…一边/, need: /一?[边邊].{1,6}一?[边邊]/ }, { re: /因为…所以/, need: /因为|因為/ },
+    { re: /虽然…但是/, need: /虽然|雖然/ }, { re: /如果…就/, need: /如果|要是|的话|的話/ },
+    { re: /又…又/, need: /又.{1,6}又|既.{1,8}又/ }, { re: /不但…而且/, need: /不但|不僅|不仅|而且/ },
+    { re: /除了…以外/, need: /除了/ }, { re: /不是…而是/, need: /不是.{1,10}而是/ },
+    { re: /只要…就/, need: /只要/ }, { re: /是…的/, need: /是.{0,12}的/ },
+  ];
+  const validated = out.filter(pt => {
+    const rule = SIG.find(s => s.re.test(pt.name));
+    return !rule || rule.need.test(translation);
+  });
+  // ③b 白名单过滤 + 同名去重 + 封顶 5 个(避免噪声)
+  const kept = validated.filter(pt => KNOWN.has(pt.name));
   const seen = new Map();
   for (const pt of kept) {
     if (seen.has(pt.name)) {
@@ -1357,7 +1375,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.15", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.16", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
