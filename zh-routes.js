@@ -1237,6 +1237,7 @@ const G_RULES = [
   { tpl: "是…的: means",      detect: /是(?:坐|用|通过|通過|靠|骑|騎|开|開|走路|打车|打車)[^，。]{1,8}(?:来|來|去|到)[^，。]{0,3}的/, trig: "是…的" },
   { tpl: "是…的: time",       detect: /是(?:昨天|今天|前天|去年|上周|上週|上个月|上個月|刚才|剛才|早上|晚上|[0-9一二三四五六七八九十]+(?:点|點|年|月|日|号|號))[^，。]{0,8}(?:来|來|去|到|学|學|买|買|做|见|見|完成|发生|發生)[^，。]{0,3}的/, trig: "是…的" },
   { tpl: "Existential 有",    detect: /(?:这里|那里|這裡|那裡|附近|上面|里面|裡面|外面|旁边|旁邊)[^，。]{0,4}有/, trig: "有" },
+  { tpl: "Existential 是",    detect: /(?:前面|后面|後面|旁边|旁邊|对面|對面|附近|外面|里面|裡面|上面|下面|左边|左邊|右边|右邊|这里|那里|這裡|那裡|桌上|墙上|牆上|门口|門口)[^，。]{0,3}是/, trig: "是", noAdd: true },
   // —— 补语:结果 ——
   { tpl: "Result complement 完", detect: /(?:做|吃|看|写|寫|读|讀|用|花|喝|听|聽|说|說|学|學)完/, trig: "完" },
   { tpl: "Result complement 到", detect: /(?:找|买|買|看|听|聽|得|收|等|遇|见|見|想|提|达|達)到/, trig: "到" },
@@ -1247,7 +1248,7 @@ const G_RULES = [
   { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)见|見/, trig: "见" },
   // —— 补语:趋向 ——
   { tpl: "Extended 起来", detect: /(?:笑|哭|想|唱|说|說|聊|忙|干|幹|做|暖和|热闹|熱鬧|兴奋|興奮|激动|激動|回忆|回憶|讨论|討論|下雨|响|響|看|听|聽|吃|闻|聞)(?:了|一)?(?:起来|起來)/, trig: "起来" },
-  { tpl: "Compound direction complement", detect: /(?:上|下|进|進|出|回|过|過)(?:来|去|來)|(?:站|坐|跳|停|拿|举|舉|抬|爬|飞|飛|升|扶|抱|提|捡|撿|走|跑|端|蹲)(?:起来|起來)/, trig: "复合趋向" },
+  { tpl: "Compound direction complement", detect: /(?:上|下|进|進|出|回|过|過)(?:了|一)?(?:来|去|來)|(?:站|坐|跳|停|拿|举|舉|抬|爬|飞|飛|升|扶|抱|提|捡|撿|走|跑|端|蹲)(?:了|一)?(?:起来|起來)/, trig: "复合趋向" },
   { tpl: "Extended 下去", detect: /(?:说|說|走|活|坚持|堅持|继续|繼續|做|唱|读|讀|写|寫|听|聽)下去/, trig: "下去" },
   { tpl: "Direction complement 来/去", detect: /(?:拿|带|帶|送|买|買|寄|叫|接|领|領|取)(?:来|去|來)/, trig: "来/去" },
   { tpl: "Direction complement with place", detect: /(?:回|进|進|出|上|下|过|過)[一-龥]{1,4}(?:来|去|來)|(?:跑|走|拿|带|帶|搬|飞|飛|退|逃|寄|扔|放|拉|送|抬|冲|衝)(?:出|进|進|回|上|下)(?:了)?(?:房间|房間|门|門|楼|樓|学校|學校|家|城|国|國|教室|办公室|辦公室|车|車|电梯|電梯|房子|公司|商店|饭馆|飯館)/, trig: "趋向" },
@@ -1298,7 +1299,7 @@ const G_RULES = [
   { tpl: "一边…一边…", detect: /一?[边邊][^，。]{1,6}一?[边邊]/, trig: "一边" },
   { tpl: "因为…所以…", detect: /因为|因為/, trig: "因为" },
   { tpl: "虽然…但是…", detect: /虽然|雖然/, trig: "虽然" },
-  { tpl: "如果…就…", detect: /如果|要是|假如|倘若/, trig: "如果" },
+  { tpl: "如果…就…", detect: /(?:如果|要是|假如|倘若)[^。！？]{0,25}就/, trig: "如果" },
   { tpl: "既…又…", detect: /既[^。！？]{1,10}又/, trig: "既" },
   { tpl: "又…又…", detect: /又[^，。]{1,6}又/, trig: "又" },
   { tpl: "不仅…而且…", detect: /(?:不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不仅" },
@@ -1441,7 +1442,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.26", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.27", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
