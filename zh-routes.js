@@ -1246,10 +1246,10 @@ const G_RULES = [
   { tpl: "Result complement 错", detect: /(?:说|說|写|寫|做|听|聽|看|记|記|拿|买|買|走)错|錯/, trig: "错", noAdd: true },
   { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)见|見/, trig: "见" },
   // —— 补语:趋向 ——
-  { tpl: "Compound direction complement", detect: /(?:站|坐|跳|拿|举|舉|抬|爬|飞|飛|升|捡|撿|扶|抱|提)(?:了|一)?(?:起来|起來)/, trig: "起来" },
-  { tpl: "Extended 起来", detect: /(?:笑|哭|想|唱|说|說|聊|忙|干|幹|做|暖和|热闹|熱鬧|兴奋|興奮|激动|激動|回忆|回憶|讨论|討論|下雨|响|響)(?:了|一)?(?:起来|起來)|(?:看|听|聽|吃|闻|聞)起来/, trig: "起来" },
-  { tpl: "Extended 下去", detect: /下去/, trig: "下去" },
-  { tpl: "Direction complement 来/去", detect: /(?:进|進|出|上|下|回|过|過)(?:来|去|來)/, trig: "来/去" },
+  { tpl: "Extended 起来", detect: /(?:笑|哭|想|唱|说|說|聊|忙|干|幹|做|暖和|热闹|熱鬧|兴奋|興奮|激动|激動|回忆|回憶|讨论|討論|下雨|响|響|看|听|聽|吃|闻|聞)(?:了|一)?(?:起来|起來)/, trig: "起来" },
+  { tpl: "Compound direction complement", detect: /(?:上|下|进|進|出|回|过|過)(?:来|去|來)|(?:站|坐|跳|停|拿|举|舉|抬|爬|飞|飛|升|扶|抱|提|捡|撿|走|跑|端|蹲)(?:起来|起來)/, trig: "复合趋向" },
+  { tpl: "Extended 下去", detect: /(?:说|說|走|活|坚持|堅持|继续|繼續|做|唱|读|讀|写|寫|听|聽)下去/, trig: "下去" },
+  { tpl: "Direction complement 来/去", detect: /(?:拿|带|帶|送|买|買|寄|叫|接|领|領|取)(?:来|去|來)/, trig: "来/去" },
   { tpl: "Direction complement with place", detect: /(?:回|进|進|出|上|下|过|過)[一-龥]{1,4}(?:来|去|來)|(?:跑|走|拿|带|帶|搬|飞|飛|退|逃|寄|扔|放|拉|送|抬|冲|衝)(?:出|进|進|回|上|下)(?:了)?(?:房间|房間|门|門|楼|樓|学校|學校|家|城|国|國|教室|办公室|辦公室|车|車|电梯|電梯|房子|公司|商店|饭馆|飯館)/, trig: "趋向" },
   // —— 补语:可能 ——
   { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/, trig: "不" },
@@ -1312,6 +1312,7 @@ const G_RULES = [
   { tpl: "为了…", detect: /^为了|^為了|，为了|，為了/, trig: "为了" },
   // —— 重叠 ——
   { tpl: "Adjective predicate 很", detect: /(?:(?<![不也還还])很|非常|特别|特別|十分|挺|真)(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏臟乱亂静靜棒帅]/, trig: "很" },
+  { tpl: "Verb reduplication VV/V一V", detect: /([看說说試试想聽听走坐歇等嘗尝玩問问找數数讀读寫写聊笑摸聞闻瞧逛轉转動动搖摇談谈聚考察]){2}|([看说想试听走坐尝玩问找读写])一\2/, trig: "重叠" },
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
   // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
@@ -1334,7 +1335,7 @@ const G_FAMILY = {
   "比 + degree": "Comparison 比", "不比 (not more than)": "Comparison 比",
   "Negation 没…过": "Experience 过", "V1着 V2": "Continuing state 着", "Existential V着": "Continuing state 着",
   "Question particle 吗": "Yes/no question 吗", "V过没有 question": "A-not-A question",
-  "Verb reduplication VV/V一V": "V + 一下", "Verb reduplication V了V": "V + 一下",
+  "Verb reduplication V了V": "Verb reduplication VV/V一V",
   "Degree complement 得很/极了": "Degree complement 得",
 };
 function correctGrammarPoints(points, translation) {
@@ -1440,7 +1441,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.25", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.26", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
