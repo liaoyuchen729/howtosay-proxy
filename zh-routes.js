@@ -23,7 +23,7 @@ const POS_ZH = ["noun","verb","adjective","adverb","pronoun","preposition","conj
   "measureWord","particle","auxiliary","interjection","number","idiom","unknown"];
 
 // —— 本地语法模板名清单(与 App GrammarDB 的 name 一一对应;模型据此挑 templateKey)——
-const TEMPLATE_NAMES_ZH = ["把 sentence: basic","把 + 在/到 + place","把 + 给","把 + 成/作","Negation before 把","Passive 被","Passive 被 without doer","Passive 让/叫","Negation before 被","是…的: time","是…的: place","是…的: means","Result complement 完","Result complement 到","Result complement 见","Result complement 懂","Result complement 好","Result complement 错","Result complement 会","Negation 没 + V + complement","Direction complement 来/去","Compound direction complement","Direction complement with place","Extended 起来","Extended 下去","Potential complement V得C","Potential complement V不C","Capacity 得下/不下","Degree complement 得很/极了","Duration complement","Frequency complement 次/遍","太…了","V + 一下","Modal 会 (skill)","Modal 会 (likelihood)","Modal 能","Modal 可以","Modal 要 (want/going to)","Modal 想","Modal 应该","Modal 得 děi","不用 (no need)","Modal 敢","Comparison 比","比 + degree","Equality 跟…一样","Negative comparison 没有","不比 (not more than)","越来越","越…越…","Superlative 最","Existential 有","Existential 是","Existential V着","Serial verbs 连动句","Pivotal 兼语句","Double objects","Time before verb","Location 在 + place + V","Measure word structure","Verbal measure 次/遍","Verb reduplication VV/V一V","Verb reduplication V了V","Adjective reduplication AABB","有点儿 vs 一点儿","Distance 离","因为…所以…","虽然…但是…","如果…就…","一…就…","先…再…","又…又…","一边…一边…","不但…而且…","只要…就…","除了…以外","连…都/也…","对…来说","跟/和…一起","为了…","不是…而是…","Completion 了","Change-of-state 了","Negation 没(有)","Experience 过","Negation 没…过","Continuing state 着","V1着 V2","Progressive 在/正在","Modification 的","Adverbial 地","Degree complement 得","Question particle 吗","Follow-up particle 呢","Suggestion particle 吧","Exclamation particle 啊","About to happen 快…了/要…了","Just now 刚/刚才","就 (earlier than expected)","才 (later than expected)","再 vs 又","Yes/no question 吗","A-not-A question","Question word 什么","Question word 谁","Question words 哪儿/哪里","Question word 怎么","Question words 几/多少","How + adjective 多","V过没有 question","Adjective predicate 很","既…又…","Alternative question 还是"];
+const TEMPLATE_NAMES_ZH = ["把 sentence: basic","把 + 在/到 + place","把 + 给","把 + 成/作","Negation before 把","Passive 被","Passive 被 without doer","Passive 让/叫","Negation before 被","是…的: time","是…的: place","是…的: means","Result complement 完","Result complement 到","Result complement 见","Result complement 懂","Result complement 好","Result complement 错","Result complement 会","Negation 没 + V + complement","Direction complement 来/去","Compound direction complement","Direction complement with place","Extended 起来","Extended 下去","Potential complement V得C","Potential complement V不C","Capacity 得下/不下","Degree complement 得很/极了","Duration complement","Frequency complement 次/遍","太…了","V + 一下","Modal 会 (skill)","Modal 会 (likelihood)","Modal 能","Modal 可以","Modal 要 (want/going to)","Modal 想","Modal 应该","Modal 得 děi","不用 (no need)","Modal 敢","Comparison 比","比 + degree","Equality 跟…一样","Negative comparison 没有","不比 (not more than)","越来越","越…越…","Superlative 最","Existential 有","Existential 是","Existential V着","Serial verbs 连动句","Pivotal 兼语句","Double objects","Time before verb","Location 在 + place + V","Measure word structure","Verbal measure 次/遍","Verb reduplication VV/V一V","Verb reduplication V了V","Adjective reduplication AABB","有点儿 vs 一点儿","Distance 离","因为…所以…","虽然…但是…","如果…就…","一…就…","先…再…","又…又…","一边…一边…","不但…而且…","只要…就…","除了…以外","连…都/也…","对…来说","跟/和…一起","为了…","不是…而是…","Completion 了","Change-of-state 了","Negation 没(有)","Experience 过","Negation 没…过","Continuing state 着","V1着 V2","Progressive 在/正在","Modification 的","Adverbial 地","Degree complement 得","Question particle 吗","Follow-up particle 呢","Suggestion particle 吧","Exclamation particle 啊","About to happen 快…了/要…了","Just now 刚/刚才","就 (earlier than expected)","才 (later than expected)","再 vs 又","Yes/no question 吗","A-not-A question","Question word 什么","Question word 谁","Question words 哪儿/哪里","Question word 怎么","Question words 几/多少","How + adjective 多","V过没有 question","Adjective predicate 很","既…又…","Alternative question 还是","不仅…而且…"];
 const TEMPLATE_ENUM_ZH = ["", ...TEMPLATE_NAMES_ZH];
 
 // —— 风格描述(中文语体)——
@@ -1301,7 +1301,8 @@ const G_RULES = [
   { tpl: "如果…就…", detect: /如果|要是|假如|倘若/, trig: "如果" },
   { tpl: "既…又…", detect: /既[^。！？]{1,10}又/, trig: "既" },
   { tpl: "又…又…", detect: /又[^，。]{1,6}又/, trig: "又" },
-  { tpl: "不但…而且…", detect: /(?:不但|不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不但" },
+  { tpl: "不仅…而且…", detect: /(?:不仅|不僅)[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不仅" },
+  { tpl: "不但…而且…", detect: /不但[\s\S]{1,15}(?:而且|并且|並且|还|還|也)/, trig: "不但" },
   { tpl: "一…就…", detect: /一[^。！？]{1,10}就/, trig: "一…就" },
   { tpl: "先…再…", detect: /先[一-龥]{1,8}再/, trig: "先…再" },
   { tpl: "只要…就…", detect: /只要/, trig: "只要" },
@@ -1354,6 +1355,12 @@ function correctGrammarPoints(points, translation) {
     if (forced) { name = forced.tpl; triggerWords = [forced.trig]; }
     // 家族归一
     if (G_FAMILY[name] && !G_BY_TPL.has(name)) name = G_FAMILY[name];
+    // 「了」重分类:完成体了 vs 变化了。句末是「开始…了 / 下雨了 / 形容词了 / 来/走/到了」这类新情况 → 变化了
+    if (name === "Completion 了" &&
+        /(?:开始|開始|下雨|下雪|刮风|颳風|天黑|天亮|变|變|长大|長大|毕业|畢業|结婚|結婚|老|饿|餓|渴|困|累|冷|热|熱|好|大|来|來|走|到|回来|回來)了[。！？!?]?$/.test(translation) &&
+        !/[了过過][一-龥]/.test(translation.replace(/了[。！？!?]?$/, ""))) {
+      name = "Change-of-state 了";
+    }
     // 校验:该模板有 detect 规则但译文不中 → 模型幻觉,丢
     const rule = G_BY_TPL.get(name);
     if (rule && !rule.detect.test(translation)) continue;
@@ -1433,7 +1440,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.24", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.25", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
