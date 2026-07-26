@@ -1208,6 +1208,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
   }
   const claimed = [];
   for (const w of m2) {
+    delete w.sourceStart;
     const s = w.sourceSpan;
     if (!s) continue;
     let idx = 0, placed = false;
@@ -1215,7 +1216,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       const p = findSpan(s, idx);
       if (p === -1) break;
       const overlaps = claimed.some(([a, b]) => p < b && p + s.length > a);
-      if (!overlaps) { claimed.push([p, p + s.length]); placed = true; break; }
+      if (!overlaps) { claimed.push([p, p + s.length]); placed = true; w.sourceStart = p; break; }
       idx = p + 1;
     }
     // 多词 span 冲突收缩:「đã đọc」的 đã 已被 已经 认领 → 收缩为 đọc,而不是整个清空
@@ -1227,7 +1228,7 @@ function fixupZhAlignment(sourceText, words, srcLang) {
           const p = findSpan(cand, idx2);
           if (p === -1) break;
           const overlaps = claimed.some(([a, b]) => p < b && p + cand.length > a);
-          if (!overlaps) { claimed.push([p, p + cand.length]); w.sourceSpan = cand; placed = true; break; }
+          if (!overlaps) { claimed.push([p, p + cand.length]); w.sourceSpan = cand; placed = true; w.sourceStart = p; break; }
           idx2 = p + 1;
         }
         if (placed) break;
@@ -1457,7 +1458,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.30", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.31", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
