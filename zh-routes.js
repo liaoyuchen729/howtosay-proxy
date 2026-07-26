@@ -385,15 +385,29 @@ function fixupZhAlignment(sourceText, words, srcLang) {
       "連絡": "連絡", "聯絡": "連絡", "联络": "連絡", "聯繫": "連絡", "联系": "連絡",
       "醫院": "病院", "医院": "病院"
     };
+    // 中日常用词对照(片假名外来词 + 不同字词):中文词 → 日语原文写法。修「游戏←ゲーム」「学习←勉強」这类完全不同形。
+    const JA_ZH_WORD = [
+      ["游戏", "ゲーム"], ["遊戲", "ゲーム"], ["学习", "勉強"], ["學習", "勉強"],
+      ["电视", "テレビ"], ["電視", "テレビ"], ["咖啡", "コーヒー"], ["电脑", "パソコン"], ["電腦", "パソコン"],
+      ["手机", "スマホ"], ["手機", "スマホ"], ["公交", "バス"], ["巴士", "バス"], ["出租车", "タクシー"], ["計程車", "タクシー"],
+      ["电梯", "エレベーター"], ["電梯", "エレベーター"], ["面包", "パン"], ["麵包", "パン"], ["果汁", "ジュース"],
+      ["蛋糕", "ケーキ"], ["啤酒", "ビール"], ["网络", "ネット"], ["網絡", "ネット"], ["相机", "カメラ"], ["相機", "カメラ"],
+      ["电影", "映画"], ["電影", "映画"], ["工作", "仕事"], ["礼物", "プレゼント"], ["禮物", "プレゼント"],
+      ["派对", "パーティー"], ["巧克力", "チョコレート"], ["便利店", "コンビニ"], ["打工", "アルバイト"],
+      ["超市", "スーパー"], ["宾馆", "ホテル"], ["賓館", "ホテル"], ["酒店", "ホテル"], ["电车", "電車"], ["電車", "電車"]
+    ];
     for (const w of ws) {
       if (!["noun", "verb", "adjective"].includes(w.partOfSpeech)) continue;
       const cjk = w.chinese.replace(/[^\u4E00-\u9FFF]/g, "");
-      if (cjk.length < 2) continue;
-      // 候选原文形:同形 / 字级归一 / 词级异体(運動←運動;运动→運動;联系→連絡)
-      const cands = [...new Set([cjk, toJa(cjk), JA_ZH_VARIANT[w.chinese]].filter(Boolean))];
-      // (a) span 以某候选打头且更长(運動してない→運動、連絡していない→連絡):收缩,余下让给别的块
+      // 词级对照:中文块含某对照词、且日语写法在原文出现 → 该日语词也是候选(游戏←ゲーム)
+      const wordCands = JA_ZH_WORD.filter(([zh, ja]) => w.chinese.includes(zh) && sourceText.includes(ja)).map(([, ja]) => ja);
+      if (cjk.length < 2 && !wordCands.length) continue;
+      // 候选原文形:同形 / 字级归一 / 词级异体 / 中日常用词对照(游戏←ゲーム、学习←勉強)
+      const cands = [...new Set([...wordCands, cjk, toJa(cjk), JA_ZH_VARIANT[w.chinese]].filter(Boolean))];
+      // (a) span 含某候选(打头如 運動してない→運動、或词内如 ゲームしていない→ゲーム)→ 收缩,余下让给别的块
       if (w.sourceSpan) {
-        const pre = cands.find(c => w.sourceSpan.length > c.length && w.sourceSpan.startsWith(c));
+        const pre = cands.find(c => w.sourceSpan.length > c.length && w.sourceSpan.startsWith(c))
+                 || cands.find(c => c.length >= 2 && w.sourceSpan.length > c.length && w.sourceSpan.includes(c));
         if (pre) w.sourceSpan = pre;
         continue;   // 有 span 的只做收缩,不新认领
       }
@@ -1443,7 +1457,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.29", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.30", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
