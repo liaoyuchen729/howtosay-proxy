@@ -18,6 +18,9 @@
 //   POST /zh/grammar-detail       { name, sourceLanguage, script } -> { name, meaning, structure, examples[] }  (月度缓存)
 //   POST /zh/feedback             fire-and-forget
 
+// —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
+const zhFeedbackBuffer = [];
+
 // —— 词性枚举(与 App 的 PartOfSpeech.rawValue 完全一致)——
 const POS_ZH = ["noun","verb","adjective","adverb","pronoun","preposition","conjunction",
   "measureWord","particle","auxiliary","interjection","number","idiom","unknown"];
@@ -1458,7 +1461,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.32", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.33", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1682,10 +1685,19 @@ export function mountZhRoutes(app, deps) {
         detail: String(b.detail || "").slice(0, 300),            // 用户补充说明
         _time: new Date().toISOString()
       };
-      console.log(JSON.stringify(evt));
-      sendToAxiom && sendToAxiom(evt);
+      console.log("[zh_feedback] " + JSON.stringify(evt));   // ① Railway 日志(Axiom 挂了也留痕)
+      sendToAxiom && sendToAxiom(evt);                        // ② Axiom(需 Railway AXIOM_TOKEN 有效)
+      zhFeedbackBuffer.push(evt);                            // ③ 内存缓冲(随时可拉,不依赖 Axiom;重启清空)
+      if (zhFeedbackBuffer.length > 200) zhFeedbackBuffer.shift();
     } catch (_) {}
     res.json({ ok: true });
+  });
+
+  // ===== /zh/feedback-recent (鉴权;返回内存里最近的反馈,给你随时查看) =====
+  //   即使 Axiom 摄取失效,也能靠这个和 Railway 日志拿到反馈。GET 或 POST 均可。
+  app.all("/zh/feedback-recent", (req, res) => {
+    if (!auth(req, res)) return;
+    res.json({ count: zhFeedbackBuffer.length, feedback: zhFeedbackBuffer.slice().reverse() });
   });
 
   console.log("[zh-routes] mounted /zh/* (Chinese-target routes)");
