@@ -1458,7 +1458,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.31", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.32", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1659,11 +1659,31 @@ export function mountZhRoutes(app, deps) {
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
   });
 
-  // ===== /zh/feedback (fire-and-forget) =====
+  // ===== /zh/feedback (fire-and-forget) —— 结构与英文版 /feedback 对齐:字段清洗+截断 =====
   app.post("/zh/feedback", (req, res) => {
     if (!auth(req, res)) return;
     try {
-      sendToAxiom && sendToAxiom({ _time: new Date().toISOString(), kind: "zh_feedback", ...req.body });
+      const b = req.body || {};
+      const evt = {
+        evt: "user_feedback",          // 与英文版同字段名,便于统一查询
+        kind: "zh_feedback",           // 中文版标记(区分英/中)
+        cat: String(b.category || "other").slice(0, 20),        // alignment / grammar / translation / other
+        lang: String(b.sourceLanguage || "").slice(0, 30),       // 界面语言(反馈者母语)
+        style: String(b.style || "").slice(0, 20),               // standard / casual / formal / concise
+        src: String(b.sourceText || "").slice(0, 200),           // 原文
+        tl: String(b.translation || "").slice(0, 200),           // 中文译文
+        flagged: Array.isArray(b.flaggedWords) ? b.flaggedWords.slice(0, 20).map(x => String(x).slice(0, 40)) : [],
+        // 上报时的逐词对齐 → 审核直接还原,无需重译
+        align: Array.isArray(b.alignment) ? b.alignment.slice(0, 60).map(w => ({
+          zh:   String(w.zh   || "").slice(0, 40),
+          span: String(w.span || "").slice(0, 60),
+          pos:  String(w.pos  || "").slice(0, 20)
+        })) : [],
+        detail: String(b.detail || "").slice(0, 300),            // 用户补充说明
+        _time: new Date().toISOString()
+      };
+      console.log(JSON.stringify(evt));
+      sendToAxiom && sendToAxiom(evt);
     } catch (_) {}
     res.json({ ok: true });
   });
