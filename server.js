@@ -353,7 +353,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v40-split-default";
+const SERVER_BUILD = "v41-parts";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -684,7 +684,14 @@ app.post("/translate", async (req, res) => {
       return res.status(400).json({ error: "empty sourceText" });
     }
 
-    const cacheKey = annotateKey(sourceLanguage, style, String(sourceText).trim(), fixedTranslation);
+    // 分段标注(新版 App 用):parts="words" 只要词对齐,parts="grammar" 只要语法点。
+    // 不传 parts = 旧行为(词对齐+语法一起返回),已安装的旧版 App 不受影响。
+    const parts = (req.body && typeof req.body.parts === "string") ? req.body.parts : "";
+    const wantWordsOnly = parts === "words";
+    const wantGrammarOnly = parts === "grammar";
+    const givenWords = Array.isArray(req.body && req.body.words) ? req.body.words : null;
+
+    const cacheKey = annotateKey(sourceLanguage, style, String(sourceText).trim(), fixedTranslation) + (parts ? `|${parts}` : "");
     if (!(req.body && req.body.noCache)) {
       const hit = annotateCache.get(cacheKey);
       if (hit) {
@@ -708,8 +715,12 @@ app.post("/translate", async (req, res) => {
         const fixed = fixedTranslation ||
           await fastTranslateText({ sourceText: String(sourceText), style, lang: sourceLanguage, model: debugModel });
         const [al, gr] = await Promise.all([
-          callAlignCompact({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation: fixed, model: debugModel }),
-          callGrammarTag({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation: fixed, model: debugModel })
+          wantGrammarOnly
+            ? Promise.resolve({ translation: fixed, words: givenWords || [] })
+            : callAlignCompact({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation: fixed, model: debugModel }),
+          wantWordsOnly
+            ? Promise.resolve({ grammarPoints: [] })
+            : callGrammarTag({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation: fixed, model: debugModel })
         ]);
         parsed = { translation: fixed || al.translation, words: al.words, grammarPoints: gr.grammarPoints };
         console.log(JSON.stringify({ evt: "split_ok", ms: Date.now() - t0, words: al.words.length, gp: gr.grammarPoints.length }));
@@ -1603,7 +1614,9 @@ app.post("/translate", async (req, res) => {
         if (typeof w.definition !== "string") w.definition = "";
       }
     }
-    if (Array.isArray(parsed.words) && parsed.words.length > 0) {
+    if (wantWordsOnly) parsed.grammarPoints = [];         // 语法点由后续 parts:"grammar" 请求单独返回
+    if (wantGrammarOnly) parsed.words = [];               // 词对齐 App 已经有了,不重复传
+    if ((Array.isArray(parsed.words) && parsed.words.length > 0) || wantGrammarOnly) {
       if (annotateCache.size >= ANNOTATE_CACHE_MAX) annotateCache.clear();
       annotateCache.set(cacheKey, parsed);
     }
