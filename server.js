@@ -86,7 +86,8 @@ function styleDesc(style) {
 // 注意:system prompt 是「按语言静态」的 —— 风格和原文放在 user message 里。
 // 这样长长的规则 + 模板清单成为稳定前缀,自动命中 OpenAI prompt cache(缓存半价),
 // 同一语言的所有请求(含切风格重译)都吃到折扣。
-function systemPrompt(lang) {
+// —— prompt 拆分:词对齐段 / 语法段(文本与原 systemPrompt 完全一致,仅分块以便并行调用) ——
+function promptWords(lang) {
   return `You are the translation + linguistic-annotation engine for an English-learning app called "How to Say". ` +
     `The user writes in ${lang}; translate it into natural English and annotate it for a ${lang}-speaking learner. ` +
     `Return ONLY JSON matching the schema.\n\n` +
@@ -218,8 +219,12 @@ function systemPrompt(lang) {
     `"had better", "wouldn't have done", "be supposed to", "prefer X to Y", "to go" (the infinitive marker). ` +
     `For ordinary single-word vocabulary — common nouns, verbs, adjectives, adverbs, including inflected forms ` +
     `like "stinks", "farts", "ran", "beautifully", "happier" — isGrammarStructure MUST be false. ` +
-    `If in doubt, set false. Single content words are never grammar structures.\n` +
-    `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). ` +
+    `If in doubt, set false. Single content words are never grammar structures.\n`;
+}
+
+// 语法段规则文本(不含开场白;单独调用时由 promptGrammar 补上)
+function promptGrammarRules(lang) {
+  return `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). ` +
     `An EMPTY grammarPoints array is acceptable ONLY for trivially simple sentences (plain ` +
     `subject-verb-object with no notable pattern). If the translation contains anything a learner would ` +
     `ask about — comparatives, "X-er and X-er", idioms, modal nuance — you MUST report it (with templateKey ` +
@@ -285,6 +290,19 @@ function systemPrompt(lang) {
     `  • name: if templateKey != "" → "". If templateKey == "" → a short grammar-point name IN ${lang} ` +
     `(e.g. "prefer X to Y 句型"). Do NOT write any explanation here — details are fetched separately.\n\n` +
     `Any ${lang} text (e.g. fallback grammar-point names) MUST be written in ${lang}, never in any other language.`;
+}
+
+// 只做语法标注的独立 prompt(译文已定,不需要词对齐规则)
+function promptGrammar(lang) {
+  return `You are the linguistic-annotation engine for an English-learning app called "How to Say". ` +
+    `The user writes in ${lang}; the English translation is ALREADY FIXED — do not re-translate. ` +
+    `Return ONLY JSON matching the schema.\n\nRules:\n` +
+    promptGrammarRules(lang);
+}
+
+// 旧的单段 prompt(合并两段,行为与改动前完全一致,作为回退路径保留)
+function systemPrompt(lang) {
+  return promptWords(lang) + promptGrammarRules(lang);
 }
 
 const exampleSchema = {
@@ -525,6 +543,106 @@ async function callOpenAI(body) {
   }
 }
 
+
+// ============= 整句标注缓存 =============
+// 同一句 + 同一语气 + 同一母语 → 结果完全确定,直接复用。
+// 收益最大的是 App 翻译页下方那几个示例句:所有用户点的是同一批句子,
+// 第一次之后就是零延迟、零 token。缓存内容是「后处理完成的最终响应」。
+const annotateCache = new Map();       // "lang|style|src|given" → 最终响应对象
+const ANNOTATE_CACHE_MAX = 4000;
+const annotateKey = (lang, style, src, given) => `${lang}|${style}|${src}|${given}`;
+
+// ============= 并行标注:词对齐(紧凑输出) + 语法标注 =============
+// 慢在哪:老路子一次请求里让模型把每个词都写成完整 JSON 对象,
+//        16 词 ≈ 2000 字符输出,模型逐字生成 → 6~7 秒。
+// 怎么快:① 词对齐改成紧凑行 "english¦pos¦span¦0"(输出量 -88%)
+//        ② 词对齐 / 语法 拆成两个请求并行跑(墙钟 = 慢的那个,而不是相加)
+//        ③ 词对齐那路不带 401 条模板清单,prompt 从 1.6 万降到 1 万字符
+// 安全网:任一路失败 / 格式不合法 → 自动回退到原来的单请求全量路径,结果与改动前一致。
+const FSEP = "¦";
+const alignSchema = {
+  type: "object",
+  properties: { translation: { type: "string" }, w: { type: "array", items: { type: "string" } } },
+  required: ["translation", "w"], additionalProperties: false
+};
+const grammarOnlySchema = {
+  type: "object",
+  properties: { grammarPoints: { type: "array", items: grammarSchema } },
+  required: ["grammarPoints"], additionalProperties: false
+};
+const COMPACT_RULE =
+  `\nOUTPUT FORMAT — return "w": an array of compact strings, ONE PER UNIT, in the order of the English translation.\n` +
+  `Each string has exactly 4 fields joined by "${FSEP}":  english${FSEP}partOfSpeech${FSEP}sourceSpan${FSEP}g\n` +
+  `  · english        — the unit's English text (same as the "english" field described above)\n` +
+  `  · partOfSpeech   — exactly one of [${POS.join(", ")}]\n` +
+  `  · sourceSpan     — follow ALL the sourceSpan rules above; leave it EMPTY (nothing between the separators) when the rules say ""\n` +
+  `  · g              — 1 when isGrammarStructure is true, 0 otherwise\n` +
+  `Examples: "very${FSEP}adverb${FSEP}很${FSEP}0"   "I${FSEP}pronoun${FSEP}${FSEP}0"   "might break${FSEP}verb${FSEP}壊れちゃいそう${FSEP}1"\n` +
+  `The character "${FSEP}" must never appear inside a field. Do not add spaces around the separators.\n`;
+
+// 紧凑行 → 与老格式完全相同的 words[](字段名、类型、取值范围都不变)
+// 解析策略对分隔符冲突免疫:前两段取自左侧、标志位取自右侧,中间全部还给 sourceSpan。
+function parseCompactWords(arr) {
+  if (!Array.isArray(arr)) return null;
+  const posSet = new Set(POS);
+  const out = [];
+  for (const line of arr) {
+    if (typeof line !== "string") return null;
+    const parts = line.split(FSEP);
+    if (parts.length < 4) return null;
+    const english = parts[0].trim();
+    const pos = parts[1].trim();
+    const flag = parts[parts.length - 1].trim();
+    const span = parts.slice(2, parts.length - 1).join(FSEP);
+    if (!english) return null;
+    out.push({
+      english,
+      partOfSpeech: posSet.has(pos) ? pos : "unknown",
+      sourceSpan: span,
+      isGrammarStructure: flag === "1" || flag.toLowerCase() === "true"
+    });
+  }
+  return out;
+}
+
+function userMsgFixed(style, lang, sourceText, fixedTranslation) {
+  return fixedTranslation
+    ? `STYLE: ${styleDesc(style)}\n\nThe English translation is ALREADY FIXED — copy it into the translation field EXACTLY and annotate IT (do not re-translate):\n"${fixedTranslation}"\n\nSource ${lang} text:\n${sourceText}`
+    : `STYLE: ${styleDesc(style)}\n\nTranslate this ${lang} text:\n${sourceText}`;
+}
+
+async function callAlignCompact({ sourceText, style, lang, fixedTranslation, model }) {
+  const body = {
+    model: model || MODEL,
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: promptWords(lang) + COMPACT_RULE },
+      { role: "user", content: userMsgFixed(style, lang, sourceText, fixedTranslation) }
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "alignment", strict: true, schema: alignSchema } }
+  };
+  const content = await openAIJSON(body);
+  const raw = JSON.parse(content);
+  const words = parseCompactWords(raw.w);
+  if (!words || words.length === 0) throw new Error("compact_parse_failed");
+  return { translation: String(raw.translation || ""), words };
+}
+
+async function callGrammarTag({ sourceText, style, lang, fixedTranslation, model }) {
+  const body = {
+    model: model || MODEL,
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: promptGrammar(lang) },
+      { role: "user", content: userMsgFixed(style, lang, sourceText, fixedTranslation) }
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "grammar_points", strict: true, schema: grammarOnlySchema } }
+  };
+  const content = await openAIJSON(body);
+  const raw = JSON.parse(content);
+  return { grammarPoints: Array.isArray(raw.grammarPoints) ? raw.grammarPoints : [] };
+}
+
 app.post("/translate", async (req, res) => {
   try {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -539,8 +657,39 @@ app.post("/translate", async (req, res) => {
       return res.status(400).json({ error: "empty sourceText" });
     }
 
+    const cacheKey = annotateKey(sourceLanguage, style, String(sourceText).trim(), fixedTranslation);
+    if (!(req.body && req.body.noCache)) {
+      const hit = annotateCache.get(cacheKey);
+      if (hit) {
+        console.log(JSON.stringify({ evt: "annotate_cache_hit", lang: sourceLanguage, style }));
+        return res.json(hit);
+      }
+    }
+
+    const debugModel = (req.body && typeof req.body.debugModel === "string" && req.body.debugModel) || null;
+    // 并行标注开关:请求里 debugSplit:1 单请求试用(灰度对比);环境变量 SPLIT_ANNOTATE=1 全量开启。
+    // 任一路出错都会落到下面的原始单请求路径,行为与改动前完全一致。
+    const useSplit = (req.body && req.body.debugSplit === 1) ||
+                     (process.env.SPLIT_ANNOTATE === "1" && !(req.body && req.body.debugSplit === 0));
+    let parsed = null;
+    if (useSplit) {
+      const t0 = Date.now();
+      try {
+        const [al, gr] = await Promise.all([
+          callAlignCompact({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation, model: debugModel }),
+          callGrammarTag({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation, model: debugModel })
+        ]);
+        parsed = { translation: fixedTranslation || al.translation, words: al.words, grammarPoints: gr.grammarPoints };
+        console.log(JSON.stringify({ evt: "split_ok", ms: Date.now() - t0, words: al.words.length, gp: gr.grammarPoints.length }));
+      } catch (e) {
+        parsed = null;
+        console.log(JSON.stringify({ evt: "split_fallback", err: String((e && e.message) || e).slice(0, 140) }));
+      }
+    }
+
+    if (!parsed) {
     const body = {
-      model: (req.body && typeof req.body.debugModel === "string" && req.body.debugModel) || MODEL,
+      model: debugModel || MODEL,
       temperature: 0.3,
       messages: [
         { role: "system", content: systemPrompt(sourceLanguage) },
@@ -575,8 +724,8 @@ app.post("/translate", async (req, res) => {
     // 服务端校验:确保每个 sourceSpan 都是原文的真子串。
     // 模型偶尔会:① 大小写/重音不一致 ② 给词根而非源文实际形式 ③ 凭空发明源文里没有的词。
     // 这里逐一修正,保证结果 JSON 永远是合法对齐。
-    let parsed;
     try { parsed = JSON.parse(content); } catch { return res.type("application/json").send(content); }
+    }
     // 两段式:第一段译文已展示给用户,这里硬覆盖,杜绝两段不一致
     if (fixedTranslation) parsed.translation = fixedTranslation;
     // 日志埋点:fallback 高频统计 → ① console(Railway 原生面板)② Axiom(可聚合 SQL)
@@ -1421,6 +1570,10 @@ app.post("/translate", async (req, res) => {
         if (!Array.isArray(w.examples)) w.examples = [];
         if (typeof w.definition !== "string") w.definition = "";
       }
+    }
+    if (Array.isArray(parsed.words) && parsed.words.length > 0) {
+      if (annotateCache.size >= ANNOTATE_CACHE_MAX) annotateCache.clear();
+      annotateCache.set(cacheKey, parsed);
     }
     res.json(parsed);
   } catch (e) {
