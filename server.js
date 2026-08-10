@@ -224,11 +224,25 @@ function promptWords(lang) {
 
 // 语法段规则文本(不含开场白;单独调用时由 promptGrammar 补上)
 function promptGrammarRules(lang) {
-  return `- grammarPoints: 1-3 key grammar structures actually used in this sentence (not more). ` +
-    `An EMPTY grammarPoints array is acceptable ONLY for trivially simple sentences (plain ` +
-    `subject-verb-object with no notable pattern). If the translation contains anything a learner would ` +
-    `ask about — comparatives, "X-er and X-er", idioms, modal nuance — you MUST report it (with templateKey ` +
-    `when matched, otherwise with a short ${lang} name). For each:\n` +
+  return `- grammarPoints: report EVERY grammar pattern a learner could study in this sentence — ` +
+    `typically 2-4, up to 5 for long sentences. Cover BOTH ends of the level range:\n` +
+    `    • Elementary (report these too — beginners are learning exactly these): verb tense actually used ` +
+    `(simple present / simple past / present continuous / present perfect / future with will or be going to), ` +
+    `articles a-an-the, plural nouns, possessives, there is/are, negation with don't/doesn't/didn't, ` +
+    `yes-no and wh- questions, basic prepositions of time and place, imperatives, ` +
+    `modal verbs (can / could / should / must / may), infinitive "to + verb", ` +
+    `linking verbs (be / look / seem / feel + adjective), conjunctions (and / but / so / because).\n` +
+    `    • Intermediate & advanced: conditionals, subjunctive, passive voice, relative clauses, ` +
+    `reported speech, gerund vs infinitive, participle clauses, comparatives & superlatives, ` +
+    `"X-er and X-er", correlatives (not only … but also), inversion, cleft sentences, ` +
+    `phrasal-verb patterns, idiomatic set structures, modal nuance (would / used to / had better).\n` +
+    `  RANKING: put the most instructive / least obvious pattern FIRST, the most elementary one last.\n` +
+    `  Return an EMPTY array ONLY when the translation is a single word or a bare interjection ` +
+    `("Yes.", "Thanks!", "Hello."). A normal sentence ALWAYS has at least its tense to report — ` +
+    `never answer "no grammar" for a full sentence.\n` +
+    `  Do NOT report the same pattern twice: one entry per pattern, with ALL its trigger words together ` +
+    `(a conditional's if-clause and main clause belong to ONE entry, not two).\n` +
+    `  Use templateKey when it matches, otherwise a short ${lang} name. For each:\n` +
     `\n` +
     `  STEP 1 — identify the grammar by inspecting YOUR ENGLISH TRANSLATION, not the user's source.\n` +
     `  Read your translation back. Which fixed structures actually appear in those English words?\n` +
@@ -353,7 +367,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v41-parts";
+const SERVER_BUILD = "v42-grammar";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -543,6 +557,29 @@ async function callOpenAI(body) {
   }
 }
 
+
+// 同名语法点合并:模型有时把一个语法(如第三条件句)按从句/主句拆成两条 →
+// 合并成一条,触发词取并集(顺序保持首次出现)。补充步骤跑完后要再合一次。
+function mergeGrammarPoints(list) {
+  if (!Array.isArray(list)) return list;
+  const out = []; const byName = new Map();
+  for (const g of list) {
+    const key = String(g.name || "").trim().toLowerCase();
+    if (!key) continue;
+    const hit = byName.get(key);
+    if (hit) {
+      const seen = new Set((hit.triggerWords || []).map(t => String(t).toLowerCase()));
+      for (const t of (g.triggerWords || [])) {
+        if (!seen.has(String(t).toLowerCase())) { hit.triggerWords.push(t); seen.add(String(t).toLowerCase()); }
+      }
+      hit.isTemplate = hit.isTemplate || g.isTemplate;
+    } else {
+      const copy = { ...g, triggerWords: [...(g.triggerWords || [])] };
+      byName.set(key, copy); out.push(copy);
+    }
+  }
+  return out;
+}
 
 // ============= 整句标注缓存 =============
 // 同一句 + 同一语气 + 同一母语 → 结果完全确定,直接复用。
@@ -846,6 +883,9 @@ app.post("/translate", async (req, res) => {
         return { name: g.name || "未命名", triggerWords: g.triggerWords || [], isTemplate: false };
       });
     }
+
+    // ①.1 先合一次同名语法点(让后续"是否已覆盖"的判断看到完整触发词)
+    if (Array.isArray(parsed.grammarPoints)) parsed.grammarPoints = mergeGrammarPoints(parsed.grammarPoints);
 
     // ①.2 比较级兜底(确定性,跨语言 —— 只看英文译文):
     //    比较级是最高频语法之一,模型时常漏报。译文里出现 "X-er/worse/better/more … than"
@@ -1605,6 +1645,9 @@ app.post("/translate", async (req, res) => {
       }
       if (fixCount > 0 && process.env.LOG_FIXUPS) console.log(`fixed ${fixCount} spans`);
     }
+    // 补充步骤(比较级/结构检测/一致性兜底)可能又插入同名点 → 收尾再合并一次
+    if (Array.isArray(parsed.grammarPoints)) parsed.grammarPoints = mergeGrammarPoints(parsed.grammarPoints);
+
     // 兼容字段:words[].examples / definition 不再由模型生成(按需走 /word-example、/word-definition),
     // 但已安装的旧版 App 解码时要求字段存在 → 统一补空
     if (Array.isArray(parsed.words)) {
