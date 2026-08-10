@@ -353,7 +353,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v38-split";
+const SERVER_BUILD = "v39-split";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -619,6 +619,25 @@ function userMsgFixed(style, lang, sourceText, fixedTranslation) {
     : `STYLE: ${styleDesc(style)}\n\nTranslate this ${lang} text:\n${sourceText}`;
 }
 
+// 快速翻译(与 /translate-fast 同一 prompt);并行标注在缺少 givenTranslation 时先取译文,
+// 保证「词对齐」和「语法标注」标的是同一句英文 —— 否则语法点会被后续校验判为不在译文里而丢弃。
+async function fastTranslateText({ sourceText, style, lang, model }) {
+  const prompt =
+    `Translate this ${lang} text into natural English.\n` +
+    `STYLE (commit fully — standard / casual / formal / concise are FOUR independent registers; the wording ` +
+    `must clearly reflect THIS one and read distinctly differently from the other three, even for short ` +
+    `sentences. casual = relaxed+contractions, formal = elevated+no contractions, concise = telegraphic+fewest words): ` +
+    `${styleDesc(style)}\n` +
+    `Translate only what the source says — do not add or drop meaning.\n\nText:\n${String(sourceText)}`;
+  const content = await openAIJSON({
+    model: model || MODEL,
+    temperature: 0.4,
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_schema", json_schema: { name: "fast_translation", strict: true, schema: fastSchema } }
+  });
+  return String(JSON.parse(content).translation || "").trim();
+}
+
 async function callAlignCompact({ sourceText, style, lang, fixedTranslation, model }) {
   const body = {
     model: model || MODEL,
@@ -683,11 +702,15 @@ app.post("/translate", async (req, res) => {
     if (useSplit) {
       const t0 = Date.now();
       try {
+        // 两路必须标注同一句英文。App 走两段式时 givenTranslation 已带上;
+        // 直接调 /translate(旧版 App / 工具)时先花 ~1 秒定稿译文,再并行标注。
+        const fixed = fixedTranslation ||
+          await fastTranslateText({ sourceText: String(sourceText), style, lang: sourceLanguage, model: debugModel });
         const [al, gr] = await Promise.all([
-          callAlignCompact({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation, model: debugModel }),
-          callGrammarTag({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation, model: debugModel })
+          callAlignCompact({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation: fixed, model: debugModel }),
+          callGrammarTag({ sourceText: String(sourceText), style, lang: sourceLanguage, fixedTranslation: fixed, model: debugModel })
         ]);
-        parsed = { translation: fixedTranslation || al.translation, words: al.words, grammarPoints: gr.grammarPoints };
+        parsed = { translation: fixed || al.translation, words: al.words, grammarPoints: gr.grammarPoints };
         console.log(JSON.stringify({ evt: "split_ok", ms: Date.now() - t0, words: al.words.length, gp: gr.grammarPoints.length }));
       } catch (e) {
         parsed = null;

@@ -54,6 +54,7 @@ const SENTENCES = {
 };
 const argLang = process.argv.find(a => a.startsWith("--lang="))?.slice(7);
 const runAll = process.argv.includes("--all");
+const useSplit = process.argv.includes("--split");   // 灰度对比:走并行标注路径
 const LANG_MAP = { zh:"Simplified Chinese", zh_Hant:"Traditional Chinese", ja:"Japanese", ko:"Korean", es:"Spanish", pt:"Portuguese", hi:"Hindi", vi:"Vietnamese", id:"Indonesian" };
 const langsToRun = runAll ? Object.values(LANG_MAP)
   : [LANG_MAP[argLang] || "Simplified Chinese"];
@@ -82,7 +83,7 @@ for (const [src, concepts, srcLang] of CASES) {
   try {
     const resp = await fetch("https://howtosay-proxy-production.up.railway.app/translate", {
       method: "POST", headers: {"Content-Type":"application/json", ...(APP_KEY ? {"X-App-Key": APP_KEY} : {})},
-      body: JSON.stringify({sourceText: src, style: "standard", sourceLanguage: srcLang}),
+      body: JSON.stringify({sourceText: src, style: "standard", sourceLanguage: srcLang, noCache: true, ...(useSplit ? {debugSplit: 1} : {})}),
       signal: AbortSignal.timeout(70000)
     });
     r = await resp.json();
