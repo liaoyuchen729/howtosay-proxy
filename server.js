@@ -353,7 +353,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v39-split";
+const SERVER_BUILD = "v40-split-default";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -694,10 +694,11 @@ app.post("/translate", async (req, res) => {
     }
 
     const debugModel = (req.body && typeof req.body.debugModel === "string" && req.body.debugModel) || null;
-    // 并行标注开关:请求里 debugSplit:1 单请求试用(灰度对比);环境变量 SPLIT_ANNOTATE=1 全量开启。
-    // 任一路出错都会落到下面的原始单请求路径,行为与改动前完全一致。
-    const useSplit = (req.body && req.body.debugSplit === 1) ||
-                     (process.env.SPLIT_ANNOTATE === "1" && !(req.body && req.body.debugSplit === 0));
+    // 并行标注:默认开启(实测 11.9s → 3.3s,质量电池硬指标全 0、识别率与旧路径同一波动区间)。
+    // 需要退回老路径时:请求里带 debugSplit:0,或设环境变量 SPLIT_ANNOTATE=0(整站回滚,无需改代码)。
+    // 任一路出错也会自动落到下面的原始单请求路径,行为与改动前完全一致。
+    const useSplit = process.env.SPLIT_ANNOTATE === "0" ? false
+                   : !(req.body && req.body.debugSplit === 0);
     let parsed = null;
     if (useSplit) {
       const t0 = Date.now();
