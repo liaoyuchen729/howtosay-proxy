@@ -353,7 +353,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v37-split";
+const SERVER_BUILD = "v38-split";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -578,7 +578,15 @@ const COMPACT_RULE =
   `  · sourceSpan     — follow ALL the sourceSpan rules above; leave it EMPTY (nothing between the separators) when the rules say ""\n` +
   `  · g              — 1 when isGrammarStructure is true, 0 otherwise\n` +
   `Examples: "very${FSEP}adverb${FSEP}很${FSEP}0"   "I${FSEP}pronoun${FSEP}${FSEP}0"   "might break${FSEP}verb${FSEP}壊れちゃいそう${FSEP}1"\n` +
-  `The character "${FSEP}" must never appear inside a field. Do not add spaces around the separators.\n`;
+  `The character "${FSEP}" must never appear inside a field. Do not add spaces around the separators.\n` +
+  `CRITICAL — the compact format changes ONLY how you write the answer, never HOW YOU SPLIT. ` +
+  `Produce exactly the same units you would have produced as objects, following every SPLITTING RULE above:\n` +
+  `  · Do NOT merge units to make the list shorter. "to go for a run" is WRONG — it must stay ` +
+  `"to" + "go" + "for" + "a" + "run", because a learner bookmarks "run" on its own.\n` +
+  `  · Only genuine set expressions (phrasal verbs / idioms listed above) and multi-word grammar chunks are single units.\n` +
+  `  · Punctuation that appears in the translation (, . ! ? ; :) is its OWN unit, written as ` +
+  `",${FSEP}unknown${FSEP}${FSEP}0" — keep it in the same position as in the translation.\n` +
+  `  · Together, the units must reconstruct the whole translation left to right, nothing dropped.\n`;
 
 // 紧凑行 → 与老格式完全相同的 words[](字段名、类型、取值范围都不变)
 // 解析策略对分隔符冲突免疫:前两段取自左侧、标志位取自右侧,中间全部还给 sourceSpan。
