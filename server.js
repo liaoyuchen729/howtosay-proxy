@@ -353,7 +353,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v36";
+const SERVER_BUILD = "v37-split";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
