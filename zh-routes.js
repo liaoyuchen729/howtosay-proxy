@@ -18,6 +18,13 @@
 //   POST /zh/grammar-detail       { name, sourceLanguage, script } -> { name, meaning, structure, examples[] }  (月度缓存)
 //   POST /zh/feedback             fire-and-forget
 
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
+
+// 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
+// prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
+const ZH_VERSION = "v3.35";
+
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
 
@@ -56,7 +63,13 @@ function scriptName(script) {
 }
 
 // —— /zh/translate 的 system prompt（按 源语言+简繁 静态，吃 prompt 缓存）——
-function systemPromptZh(srcLang, script) {
+// —— prompt 拆分:词对齐段 / 语法段(文本与原 systemPromptZh 完全一致,仅分块以便并行调用)——
+// 语法段背着 114 条模板清单(~1959 字符)+ 115 值枚举,词对齐那一路完全用不到 → 拆开后对齐请求短很多。
+// compact=true:紧凑并行路径专用 —— 不要拼音。
+// App 的 AlignedWord.displayPinyin 一律走本地 PinyinService(带变调),
+// 服务端返回的本调拼音从来没被显示过;在关键路径上生成它纯属白等。
+// 老的单请求全量路径(systemPromptZh)不传 compact,文本与改动前逐字一致。
+function promptWordsZh(srcLang, script, compact = false) {
   const target = `natural Mandarin Chinese, written in ${scriptName(script)}`;
   return `You are the translation + linguistic-annotation engine for a Chinese-learning app called "How to Say".\n` +
     `The user writes in ${srcLang}; translate it into ${target}, and annotate it for a ${srcLang}-speaking learner of Chinese.\n` +
@@ -76,7 +89,8 @@ function systemPromptZh(srcLang, script) {
     `  Grammar structures (把…、被…、是…的、V得C、越来越…) are marked isGrammarStructure=true; keep them minimal.\n` +
     `  For each unit:\n` +
     `  • chinese: its Chinese text (in ${scriptName(script)}).\n` +
-    `  • pinyin: Hanyu Pinyin WITH TONE MARKS for this unit (e.g. "hěn", "pǎo bù"). For a non-Chinese unit use "".\n` +
+    (compact ? "" :
+    `  • pinyin: Hanyu Pinyin WITH TONE MARKS for this unit (e.g. "hěn", "pǎo bù"). For a non-Chinese unit use "".\n`) +
     `  • partOfSpeech: exactly one of [${POS_ZH.join(", ")}].\n` +
     `  • sourceSpan — STRICT ALIGNMENT RULES (getting these wrong breaks the app; follow exactly):\n` +
     `    A. sourceSpan is a CONTIGUOUS substring COPIED CHARACTER-FOR-CHARACTER from the user's ORIGINAL input. ` +
@@ -125,11 +139,29 @@ function systemPromptZh(srcLang, script) {
           "      家でゆっくり休みたい → 想(たい) + 在(で) + 家(家) + 好好(ゆっくり) + 休息(休み)"
         : "      I bought three books → 我(I) + 买了(bought) + 三本(three) + 书(books)\n" +
           "      The book is mine → 书(book) + 是(is) + 我的(mine);  the → \"\"\n" +
-          "      There are two cats in the garden → 花园(the garden) + 里(in) + 有(There are) + 两只(two) + 猫(cats)"}\n` +
-    `- grammarPoints: list the Chinese grammar points this sentence uses. For each:\n` +
+          "      There are two cats in the garden → 花园(the garden) + 里(in) + 有(There are) + 两只(two) + 猫(cats)"}\n`;
+}
+
+// 语法段规则文本(不含开场白;单独调用时由 promptGrammarZh 补上)
+function promptGrammarRulesZh(srcLang) {
+  return `- grammarPoints: list the Chinese grammar points this sentence uses. For each:\n` +
     `  • templateKey: if it matches one of these exactly, copy it verbatim; else "". List:\n${TEMPLATE_NAMES_ZH.join(" | ")}\n` +
     `  • triggerWords: the Chinese fragment(s) in the translation that trigger it (e.g. ["把"], ["越来越"]).\n` +
     `  • name: if templateKey=="" a short Chinese name for the point; else "".`;
+}
+
+// 只做语法标注的独立 prompt(译文已定,不需要任何词对齐规则;简繁在开场白里交代)
+function promptGrammarZh(srcLang, script) {
+  return `You are the linguistic-annotation engine for a Chinese-learning app called "How to Say".\n` +
+    `The user writes in ${srcLang}; the Chinese translation (written in ${scriptName(script)}) is ALREADY FIXED — ` +
+    `do not re-translate it. Annotate it for a ${srcLang}-speaking learner of Chinese.\n` +
+    `Return ONLY JSON matching the schema.\n\nRules:\n` +
+    promptGrammarRulesZh(srcLang);
+}
+
+// 旧的单段 prompt(两段拼回原文,与改动前逐字节一致,作为回退路径保留)
+function systemPromptZh(srcLang, script) {
+  return promptWordsZh(srcLang, script) + promptGrammarRulesZh(srcLang);
 }
 
 // ============ 词对齐确定性修正(不靠模型自觉,代码强制)============
@@ -1453,6 +1485,89 @@ const translateSchemaZh = {
   additionalProperties: false
 };
 
+// ============= 整句标注缓存(中文版独立命名空间)=============
+// 同一句 + 同一语气 + 同一简繁 + 同一母语 → 结果完全确定,直接复用。
+// 收益最大的是 App 翻译页下方那几个示例句 + 切语气回看:第一次之后零延迟、零 token。
+// 缓存内容是「后处理(fixup / correctGrammarPoints)完成的最终响应」。
+const annotateCacheZh = new Map();     // "lang|style|script|src|given" → 最终响应对象
+const ANNOTATE_CACHE_MAX_ZH = 4000;
+const annotateKeyZh = (lang, style, script, src, given) => `${lang}|${style}|${script}|${src}|${given}`;
+
+// ============= 并行标注:词对齐(紧凑输出) + 语法标注 =============
+// 慢在哪:老路子一次请求里让模型把每个词块写成完整 JSON 对象(chinese/pinyin/partOfSpeech/sourceSpan/flag),
+//        同一次请求还背着 114 条模板清单做语法标注 —— 输出逐字生成 → 用户干等 ~30 秒。
+// 怎么快:① 词对齐改成紧凑行 "中文¦拼音¦词性¦源文¦0"(输出量大降,字段一个不少)
+//        ② 词对齐 / 语法 拆成两个请求并行跑(墙钟 = 慢的那个,而不是相加)
+//        ③ 词对齐那路完全不带 TEMPLATE_NAMES_ZH 清单和它的 115 值枚举
+// 安全网:任一路失败 / 紧凑行解析不出来 → 自动回退到原来的单请求全量路径,结果与改动前一致。
+const FSEP_ZH = "¦";
+const alignSchemaZh = {
+  type: "object",
+  properties: { translation: { type: "string" }, w: { type: "array", items: { type: "string" } } },
+  required: ["translation", "w"], additionalProperties: false
+};
+const grammarOnlySchemaZh = {
+  type: "object",
+  properties: { grammarPoints: { type: "array", items: grammarSchemaZh } },
+  required: ["grammarPoints"], additionalProperties: false
+};
+const COMPACT_RULE_ZH =
+  `\nOUTPUT FORMAT — return "w": an array of compact strings, ONE PER UNIT, in the order of the Chinese translation.\n` +
+  `Each string has exactly 4 fields joined by "${FSEP_ZH}":  chinese${FSEP_ZH}partOfSpeech${FSEP_ZH}sourceSpan${FSEP_ZH}g\n` +
+  `  · chinese      — the unit's Chinese text (same as the "chinese" field described above)\n` +
+  `  · partOfSpeech — exactly one of [${POS_ZH.join(", ")}]\n` +
+  `  · sourceSpan   — follow ALL the sourceSpan rules above; leave it EMPTY (nothing between the separators) when the rules say ""\n` +
+  `  · g            — 1 when isGrammarStructure is true, 0 otherwise\n` +
+  `Do NOT output pinyin — the app generates it locally.\n` +
+  `Examples: "买了${FSEP_ZH}verb${FSEP_ZH}bought${FSEP_ZH}0"   ` +
+  `"我${FSEP_ZH}pronoun${FSEP_ZH}${FSEP_ZH}0"   ` +
+  `"把${FSEP_ZH}particle${FSEP_ZH}${FSEP_ZH}1"   ` +
+  `"，${FSEP_ZH}unknown${FSEP_ZH}${FSEP_ZH}0"\n` +
+  `The character "${FSEP_ZH}" must never appear inside a field. Do not add spaces around the separators.\n` +
+  `CRITICAL — the compact format changes ONLY how you write the answer, never HOW YOU SPLIT. ` +
+  `Produce exactly the same units you would have produced as objects, following every SPLITTING rule above:\n` +
+  `  · Keep as ONE unit exactly what the SPLITTING rules say belongs together (三本 / 买了 / 会说 / 我的 / 今天早上 / chengyu) — no more, no less.\n` +
+  `  · Do NOT merge units to make the list shorter: 三本 + 书 stays TWO units, 很 + 累 stays TWO units, ` +
+  `X的Y stays THREE units (X + 的 + Y).\n` +
+  `  · Punctuation that appears in the translation (，。？！、) is its OWN unit, with EMPTY sourceSpan.\n` +
+  `  · Together, the units must reconstruct the whole translation left to right — nothing dropped, nothing added.\n`;
+
+// 紧凑行 → 与老格式完全相同的 words[](字段名、类型、取值范围都不变)
+// pinyin 字段仍然保留在结果里(空串),保证 App 端 APITranslation 的解码结构不变;
+// 它本来就不用于显示(AlignedWord.displayPinyin 走本地 PinyinService)。
+// 解析策略对分隔符冲突免疫:前两段取自左侧、标志位取自右侧,中间全部还给 sourceSpan。
+function parseCompactWordsZh(arr) {
+  if (!Array.isArray(arr)) return null;
+  const posSet = new Set(POS_ZH);
+  const out = [];
+  for (const line of arr) {
+    if (typeof line !== "string") return null;
+    const parts = line.split(FSEP_ZH);
+    if (parts.length < 4) return null;
+    const chinese = parts[0].trim();
+    const pos = parts[1].trim();
+    const flag = parts[parts.length - 1].trim();
+    const span = parts.slice(2, parts.length - 1).join(FSEP_ZH);
+    if (!chinese) return null;
+    out.push({
+      chinese,
+      pinyin: "",
+      partOfSpeech: posSet.has(pos) ? pos : "unknown",
+      sourceSpan: span,
+      isGrammarStructure: flag === "1" || flag.toLowerCase() === "true"
+    });
+  }
+  return out;
+}
+
+// user message:与改动前逐字一致(givenTranslation 为空时不写 ALREADY-DECIDED 那行),
+// 并行的两路用同一条 user message,保证词对齐和语法标注标的是同一句中文。
+function userMsgZh(style, srcLang, sourceText, fixedTranslation) {
+  return `STYLE: ${styleDescZh(style)}\n` +
+    (fixedTranslation ? `ALREADY-DECIDED TRANSLATION (use this exact Chinese, just annotate it): ${fixedTranslation}\n` : "") +
+    `INPUT (${srcLang}): ${sourceText}`;
+}
+
 export function mountZhRoutes(app, deps) {
   const { openAIJSON, MODEL: MODEL_BASE, DICT_MODEL, APP_SHARED_SECRET,
           monthKey, cacheSweep, cachePut, sendToAxiom, CACHE_MAX = 30000 } = deps;
@@ -1461,7 +1576,7 @@ export function mountZhRoutes(app, deps) {
   const MODEL = process.env.OPENAI_MODEL_ZH || MODEL_BASE;
 
   // 版本探针:确认部署是否落地
-  app.get("/zh/version", (_req, res) => res.json({ zh: "v3.33", fixup: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
+  app.get("/zh/version", (_req, res) => res.json({ zh: ZH_VERSION, fixup: true, split: true, compact: true, noPinyin: true, persist: true, model: process.env.OPENAI_MODEL_ZH || "inherit" }));
 
   const auth = (req, res) => {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -1480,26 +1595,118 @@ export function mountZhRoutes(app, deps) {
   const sentCacheZh = new Map();    // 永久:整句翻译
   const exampleCacheZh = new Map(); // 月度:例句
   const grammarCacheZh = new Map(); // 月度:语法详解
+  const fastCacheZh = new Map();    // 永久:第一段快速译文(同句同语气 → 结果确定)
+
+  // ===== 缓存持久化(中文版独立文件,不碰英文版的 howtosay-cache.json)=====
+  // 不做的话:Railway 每次重新部署 = 进程重启 = 五个缓存全部清零,
+  // 所有用户重新付一遍 token、重新等一遍。
+  // 默认写 /tmp(容器内重启可恢复);挂了 Volume 后设 CACHE_DIR=/data 就能跨部署持久。
+  // 回载规则与英文版一致:词典释义 / 整句翻译永久;例句 / 语法详解同月才回载;
+  // 整句标注多一道 ZH_VERSION 版本闸 —— 改了 prompt 或输出格式,旧结果立即失效。
+  const CACHE_FILE_ZH = join(process.env.CACHE_DIR || "/tmp", "howtosay-zh-cache.json");
+  function loadCachesZh() {
+    try {
+      const d = JSON.parse(readFileSync(CACHE_FILE_ZH, "utf-8"));
+      for (const [k, v] of d.def  || []) defCacheZh.set(k, v);
+      for (const [k, v] of d.sent || []) sentCacheZh.set(k, v);
+      for (const [k, v] of d.fast || []) fastCacheZh.set(k, v);
+      if (d.month === monthKey()) {
+        for (const [k, v] of d.example || []) exampleCacheZh.set(k, v);
+        for (const [k, v] of d.grammar || []) grammarCacheZh.set(k, v);
+      }
+      if (d.v === ZH_VERSION) {
+        for (const [k, v] of d.annotate || []) annotateCacheZh.set(k, v);
+      }
+      console.log(`zh cache loaded: def=${defCacheZh.size} sent=${sentCacheZh.size} ` +
+                  `fast=${fastCacheZh.size} ex=${exampleCacheZh.size} ` +
+                  `gr=${grammarCacheZh.size} ann=${annotateCacheZh.size}`);
+    } catch { /* 首次启动无文件,正常 */ }
+  }
+  function saveCachesZh() {
+    try {
+      // 先写临时文件再改名:5 分钟一次的定时落盘万一撞上进程被杀,
+      // 也不会留下半截 JSON 把已有缓存一起废掉。
+      const tmp = CACHE_FILE_ZH + ".tmp";
+      writeFileSync(tmp, JSON.stringify({
+        v: ZH_VERSION, month: monthKey(),
+        def: [...defCacheZh], sent: [...sentCacheZh], fast: [...fastCacheZh],
+        example: [...exampleCacheZh], grammar: [...grammarCacheZh],
+        annotate: [...annotateCacheZh],
+      }));
+      renameSync(tmp, CACHE_FILE_ZH);
+    } catch { /* 磁盘异常不影响主流程 */ }
+  }
+  setInterval(saveCachesZh, 5 * 60 * 1000).unref();   // 每 5 分钟落盘
+  // 注意:必须挂 "exit" 而不是 "SIGTERM" —— server.js 的 SIGTERM 处理器注册在前,
+  // 且它自己会 process.exit(0),后注册的 SIGTERM 监听根本轮不到执行;
+  // "exit" 事件在 process.exit() 时同步触发,writeFileSync 在里面是有效的。
+  process.on("exit", saveCachesZh);
+  loadCachesZh();
+
+  // 快速翻译(/zh/translate-fast 与并行标注共用同一 prompt):
+  // 并行标注在缺少 givenTranslation 时先取译文,保证「词对齐」和「语法标注」标的是同一句中文 ——
+  // 否则两路各译一句,语法点的触发词会对不上词块。
+  async function fastTranslateZh({ sourceText, style, sourceLanguage, script }) {
+    // 同句同语气同简繁同母语 → 译文完全确定,直接复用。
+    // 没有这一层的话,首页那几个示例句每点一次都要重新等 ~1 秒,
+    // 哪怕下一段的整句标注早就命中缓存了。
+    const ck = `${sourceLanguage}|${style}|${script}|${String(sourceText).trim()}`;
+    const hit = fastCacheZh.get(ck);
+    if (hit !== undefined) return hit;
+    const content = await oaiJSON({
+      model: MODEL, temperature: 0.4,
+      response_format: jsonSchema("fast_zh", {
+        type: "object", properties: { translation: { type: "string" } },
+        required: ["translation"], additionalProperties: false
+      }),
+      messages: [
+        sys(`Translate the user's ${sourceLanguage} into ${styleDescZh(style)}, written in ${scriptName(script)}. Return ONLY {"translation": "..."}. Translate only what is written; add nothing.`),
+        usr(sourceText)
+      ]
+    });
+    const out = String(JSON.parse(content).translation || "").trim();
+    if (out) cachePut(fastCacheZh, ck, out);
+    return out;
+  }
 
   // ===== /zh/translate-fast =====
   app.post("/zh/translate-fast", async (req, res) => {
     try {
       if (!auth(req, res)) return;
       const { sourceText = "", style = "standard", sourceLanguage = "English", script = "Hans" } = req.body || {};
-      const content = await oaiJSON({
-        model: MODEL, temperature: 0.4,
-        response_format: jsonSchema("fast_zh", {
-          type: "object", properties: { translation: { type: "string" } },
-          required: ["translation"], additionalProperties: false
-        }),
-        messages: [
-          sys(`Translate the user's ${sourceLanguage} into ${styleDescZh(style)}, written in ${scriptName(script)}. Return ONLY {"translation": "..."}. Translate only what is written; add nothing.`),
-          usr(sourceText)
-        ]
-      });
-      res.json(JSON.parse(content));
+      res.json({ translation: await fastTranslateZh({ sourceText, style, sourceLanguage, script }) });
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
   });
+
+  // 词对齐一路:只带词对齐规则 + 紧凑输出规则,不带模板清单/枚举
+  async function callAlignCompactZh({ sourceText, style, sourceLanguage, script, fixedTranslation }) {
+    const content = await oaiJSON({
+      model: MODEL, temperature: 0.3,
+      response_format: jsonSchema("align_zh", alignSchemaZh),
+      messages: [
+        sys(promptWordsZh(sourceLanguage, script, true) + COMPACT_RULE_ZH),
+        usr(userMsgZh(style, sourceLanguage, sourceText, fixedTranslation))
+      ]
+    });
+    const raw = JSON.parse(content);
+    const words = parseCompactWordsZh(raw.w);
+    if (!words || words.length === 0) throw new Error("compact_parse_failed");
+    return { translation: String(raw.translation || ""), words };
+  }
+
+  // 语法一路:译文已定,只挑模板 + 触发词
+  async function callGrammarTagZh({ sourceText, style, sourceLanguage, script, fixedTranslation }) {
+    const content = await oaiJSON({
+      model: MODEL, temperature: 0.3,
+      response_format: jsonSchema("grammar_zh", grammarOnlySchemaZh),
+      messages: [
+        sys(promptGrammarZh(sourceLanguage, script)),
+        usr(userMsgZh(style, sourceLanguage, sourceText, fixedTranslation))
+      ]
+    });
+    const raw = JSON.parse(content);
+    return { grammarPoints: Array.isArray(raw.grammarPoints) ? raw.grammarPoints : [] };
+  }
 
   // ===== /zh/translate =====
   app.post("/zh/translate", async (req, res) => {
@@ -1507,18 +1714,59 @@ export function mountZhRoutes(app, deps) {
       if (!auth(req, res)) return;
       const { sourceText = "", style = "standard", sourceLanguage = "English",
               givenTranslation = "", script = "Hans" } = req.body || {};
-      const userMsg =
-        `STYLE: ${styleDescZh(style)}\n` +
-        (givenTranslation ? `ALREADY-DECIDED TRANSLATION (use this exact Chinese, just annotate it): ${givenTranslation}\n` : "") +
-        `INPUT (${sourceLanguage}): ${sourceText}`;
-      const content = await oaiJSON({
-        model: MODEL, temperature: 0.3,
-        response_format: jsonSchema("translate_zh", translateSchemaZh),
-        messages: [ sys(systemPromptZh(sourceLanguage, script)), usr(userMsg) ]
-      });
-      const parsed = JSON.parse(content);
+      const fixedTranslation = String(givenTranslation || "").trim();
+      const wantRaw = !!(req.body && req.body.__raw);
+
+      // 整句标注缓存:同句+同语气+同简繁+同母语 → 命中即返回,零延迟零 token。
+      // 调试路径(__raw)绕开缓存,保证对齐回归电池每次拿到的是本次模型的原始输出。
+      const cacheKey = annotateKeyZh(sourceLanguage, style, script, String(sourceText).trim(), fixedTranslation);
+      const useCache = !wantRaw && !(req.body && req.body.noCache);
+      if (useCache) {
+        const hit = annotateCacheZh.get(cacheKey);
+        if (hit) {
+          console.log(JSON.stringify({ evt: "zh_annotate_cache_hit", lang: sourceLanguage, style, script }));
+          return res.json(hit);
+        }
+      }
+
+      // 并行标注:默认开启。需要退回老路径时:请求里带 debugSplit:0,
+      // 或设环境变量 SPLIT_ANNOTATE_ZH=0(整站回滚,无需改代码)。
+      // 任一路出错也会自动落到下面的原始单请求路径,行为与改动前完全一致。
+      const useSplit = process.env.SPLIT_ANNOTATE_ZH === "0" ? false
+                     : !(req.body && req.body.debugSplit === 0);
+      let parsed = null;
+      if (useSplit) {
+        const t0 = Date.now();
+        try {
+          // 两路必须标注同一句中文。App 走两段式时 givenTranslation 已带上;
+          // 直接调 /zh/translate(工具/回归电池)时先花 ~1 秒定稿译文,再并行标注。
+          const fixed = fixedTranslation ||
+            await fastTranslateZh({ sourceText, style, sourceLanguage, script });
+          const [al, gr] = await Promise.all([
+            callAlignCompactZh({ sourceText, style, sourceLanguage, script, fixedTranslation: fixed }),
+            callGrammarTagZh({ sourceText, style, sourceLanguage, script, fixedTranslation: fixed })
+          ]);
+          parsed = { translation: fixed || al.translation, words: al.words, grammarPoints: gr.grammarPoints };
+          console.log(JSON.stringify({ evt: "zh_split_ok", ms: Date.now() - t0, words: al.words.length, gp: gr.grammarPoints.length }));
+        } catch (e) {
+          parsed = null;
+          console.log(JSON.stringify({ evt: "zh_split_fallback", err: String((e && (e.message || e.error)) || e).slice(0, 140) }));
+        }
+      }
+
+      if (!parsed) {
+        const content = await oaiJSON({
+          model: MODEL, temperature: 0.3,
+          response_format: jsonSchema("translate_zh", translateSchemaZh),
+          messages: [
+            sys(systemPromptZh(sourceLanguage, script)),
+            usr(userMsgZh(style, sourceLanguage, sourceText, fixedTranslation))
+          ]
+        });
+        parsed = JSON.parse(content);
+      }
       // 只读调试:抓修正前原始词块(用于确定性回归,不改变正常响应结构)
-      const rawWords = req.body.__raw ? JSON.parse(JSON.stringify(parsed.words || [])) : null;
+      const rawWords = wantRaw ? JSON.parse(JSON.stringify(parsed.words || [])) : null;
       // 词对齐确定性修正(去幻觉/剥助词/合并/去重)—— 见 fixupZhAlignment
       const words = fixupZhAlignment(sourceText, parsed.words || [], sourceLanguage);
       // grammarPoints: templateKey 命中就用它当 name(App 据 name 查本地模板)
@@ -1530,7 +1778,12 @@ export function mountZhRoutes(app, deps) {
       // 触发词里出现明确结构标记时,强制模板名与之一致(不管模型返回什么),
       // 保证「详解讲的语法」「例句」和「句子里那个字」严格对应。
       grammarPoints = correctGrammarPoints(grammarPoints, parsed.translation || "");
-      res.json({ translation: parsed.translation, words, grammarPoints, ...(rawWords ? { rawWords } : {}) });
+      const out = { translation: parsed.translation, words, grammarPoints };
+      if (useCache && Array.isArray(words) && words.length > 0) {
+        if (annotateCacheZh.size >= ANNOTATE_CACHE_MAX_ZH) annotateCacheZh.clear();
+        annotateCacheZh.set(cacheKey, out);
+      }
+      res.json(rawWords ? { ...out, rawWords } : out);
     } catch (e) { res.status(e.status || 500).json({ error: e.error || "server_error", detail: e.detail }); }
   });
 
