@@ -367,7 +367,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v42-grammar";
+const SERVER_BUILD = "v43-grammar";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -574,7 +574,13 @@ function mergeGrammarPoints(list) {
       }
       hit.isTemplate = hit.isTemplate || g.isTemplate;
     } else {
-      const copy = { ...g, triggerWords: [...(g.triggerWords || [])] };
+      // 条内也要去重:模型常把 "I" 之类重复词列两遍
+      const seen = new Set(); const trigs = [];
+      for (const t of (g.triggerWords || [])) {
+        const tl = String(t).toLowerCase();
+        if (!seen.has(tl)) { seen.add(tl); trigs.push(t); }
+      }
+      const copy = { ...g, triggerWords: trigs };
       byName.set(key, copy); out.push(copy);
     }
   }
