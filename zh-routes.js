@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.35";
+const ZH_VERSION = "v3.36";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -1282,7 +1282,7 @@ const G_RULES = [
   // —— 句式 ——
   { tpl: "把 sentence: basic", detect: /把[^，。？！]/, trig: "把" },
   { tpl: "Passive 被",        detect: /被/, trig: "被" },
-  { tpl: "Pivotal 兼语句",    detect: /(?:让|讓|叫|使|请|請)[我你他她它人們们大家咱您学學生孩子父母老師师同弟妹哥姐爸妈媽爷奶儿兒女客朋友员員工者位先小]/, trig: "让" },
+  { tpl: "Pivotal 兼语句",    detect: /(?:让|讓|叫|使|请|請)[我你他她它人們们大家咱您学學生孩子父母老師师同弟妹哥姐爸妈媽爷爺奶客儿兒女朋友员員工者位先小]/, trig: "让" },
   { tpl: "是…的: place",      detect: /是(?:在|从|從)[^，。]{1,10}(?:来|來|去|学|學|买|買|做|见|見|认识|認識|发生|發生|出生|工作)[^，。]{0,3}的/, trig: "是…的" },
   { tpl: "是…的: means",      detect: /是(?:坐|用|通过|通過|靠|骑|騎|开|開|走路|打车|打車)[^，。]{1,8}(?:来|來|去|到)[^，。]{0,3}的/, trig: "是…的" },
   { tpl: "是…的: time",       detect: /是(?:昨天|今天|前天|去年|上周|上週|上个月|上個月|刚才|剛才|早上|晚上|[0-9一二三四五六七八九十]+(?:点|點|年|月|日|号|號))[^，。]{0,8}(?:来|來|去|到|学|學|买|買|做|见|見|完成|发生|發生)[^，。]{0,3}的/, trig: "是…的" },
@@ -1292,10 +1292,10 @@ const G_RULES = [
   { tpl: "Result complement 完", detect: /(?:做|吃|看|写|寫|读|讀|用|花|喝|听|聽|说|說|学|學)完/, trig: "完" },
   { tpl: "Result complement 到", detect: /(?:找|买|買|看|听|聽|得|收|等|遇|见|見|想|提|达|達)到/, trig: "到" },
   { tpl: "Result complement 懂", detect: /(?:听|聽|看|读|讀)懂/, trig: "懂" },
-  { tpl: "Result complement 会", detect: /(?:学|學)会|會/, trig: "会", noAdd: true },
+  { tpl: "Result complement 会", detect: /(?:学|學)(?:会|會)/, trig: "会", noAdd: true },
   { tpl: "Result complement 好", detect: /(?:做|准备|準備|写|寫|画|畫|修|收拾|安排|洗)好/, trig: "好", noAdd: true },
-  { tpl: "Result complement 错", detect: /(?:说|說|写|寫|做|听|聽|看|记|記|拿|买|買|走)错|錯/, trig: "错", noAdd: true },
-  { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)见|見/, trig: "见" },
+  { tpl: "Result complement 错", detect: /(?:说|說|写|寫|做|听|聽|看|记|記|拿|买|買|走)(?:错|錯)/, trig: "错", noAdd: true },
+  { tpl: "Result complement 见", detect: /(?:看|听|聽|碰|遇|梦|夢)(?:见|見)/, trig: "见" },
   // —— 补语:趋向 ——
   { tpl: "Extended 起来", detect: /(?:笑|哭|想|唱|说|說|聊|忙|干|幹|做|暖和|热闹|熱鬧|兴奋|興奮|激动|激動|回忆|回憶|讨论|討論|下雨|响|響|看|听|聽|吃|闻|聞)(?:了|一)?(?:起来|起來)/, trig: "起来" },
   { tpl: "Compound direction complement", detect: /(?:上|下|进|進|出|回|过|過)(?:了|一)?(?:来|去|來)|(?:站|坐|跳|停|拿|举|舉|抬|爬|飞|飛|升|扶|抱|提|捡|撿|走|跑|端|蹲)(?:了|一)?(?:起来|起來)/, trig: "复合趋向" },
@@ -1303,7 +1303,13 @@ const G_RULES = [
   { tpl: "Direction complement 来/去", detect: /(?:拿|带|帶|送|买|買|寄|叫|接|领|領|取)(?:来|去|來)/, trig: "来/去" },
   { tpl: "Direction complement with place", detect: /(?:回|进|進|出|上|下|过|過)[一-龥]{1,4}(?:来|去|來)|(?:跑|走|拿|带|帶|搬|飞|飛|退|逃|寄|扔|放|拉|送|抬|冲|衝)(?:出|进|進|回|上|下)(?:了)?(?:房间|房間|门|門|楼|樓|学校|學校|家|城|国|國|教室|办公室|辦公室|车|車|电梯|電梯|房子|公司|商店|饭馆|飯館)/, trig: "趋向" },
   // —— 补语:可能 ——
-  { tpl: "Potential complement V不C", detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/, trig: "不" },
+  { tpl: "Potential complement V不C",
+    // deny:这些是固定词/普通否定,不是「V 不 C」可能补语 ——
+    // 对不起(道歉)、不开心/不高兴(形容词否定)、只不过(连词)、了不起(形容词)。
+    detect: /[一-龥]不(?:了|下|动|動|完|起|来|來|见|見|懂|到|上|出|回|过|過|清|清楚|住|够|夠|惯|慣|着|著|开|開|掉)/,
+    // 全局标志:一句里可能出现多个固定词,要全部抠掉
+    deny: /对不起|對不起|对不住|對不住|不开心|不開心|不高兴|不高興|不耐烦|不耐煩|只不过|只不過|了不起|不过是|不過是/g,
+    trig: "不" },
   { tpl: "Potential complement V得C", detect: /[一-龥]得(?:了|下|动|動|完|起|来|來|见|見|懂|到|上)/, trig: "得" },
   // —— 补语:时长/动量 ——
   { tpl: "Duration complement", detect: /(?:了|过|過)?[一二三四五六七八九十两兩几幾半0-9]+(?:年|个月|個月|天|小时|小時|分钟|分鐘|周|週|星期|个小时|個小時)/, trig: "时长" },
@@ -1323,23 +1329,23 @@ const G_RULES = [
   { tpl: "越来越", detect: /越来越|越來越/, trig: "越来越" },
   { tpl: "越…越…", detect: /越(?!来|來)[^。！？]{1,6}越/, trig: "越" },
   { tpl: "Comparison 比", detect: /[一-龥]比[一-龥]/, trig: "比" },
-  { tpl: "Equality 跟…一样", detect: /(?:跟|和|与|與)[^，。]{1,8}一样|一樣/, trig: "一样" },
-  { tpl: "Negative comparison 没有", detect: /没有[^，。]{1,8}(?:那么|這么|这么|那麼|高|大|好|多|重)/, trig: "没有" },
+  { tpl: "Equality 跟…一样", detect: /(?:跟|和|与|與)[^，。]{1,8}(?:一样|一樣)/, trig: "一样" },
+  { tpl: "Negative comparison 没有", detect: /(?:没有|沒有)[^，。]{1,8}(?:那么|那麼|这么|這麼|高|大|好|多|重)/, trig: "没有" },
   { tpl: "Superlative 最", detect: /最[一-龥]/, trig: "最" },
-  { tpl: "Distance 离", detect: /离[一-龥]{1,6}(?:很|不|太|近|远|遠|有)/, trig: "离" },
+  { tpl: "Distance 离", detect: /(?:离|離)[一-龥]{1,6}(?:很|不|太|近|远|遠|有)/, trig: "离" },
   // —— 体标记 ——
-  { tpl: "Experience 过", detect: /[一-龥]过(?![来來去程分度])(?=[了吗嗎？。！，]|$|[一-龥])/, trig: "过" },
-  { tpl: "Continuing state 着", detect: /(?:开|開|关|關|穿|戴|拿|坐|站|躺|挂|掛|放|带|帶|睡|看|听|聽|记|記|留|等|亮|笑|哭|抱|举|舉|низ|锁|鎖)着/, trig: "着" },
+  { tpl: "Experience 过", detect: /[一-龥](?:过|過)(?![来來去程分度])(?=[了吗嗎？。！，]|$|[一-龥])/, trig: "过" },
+  { tpl: "Continuing state 着", detect: /(?:开|開|关|關|穿|戴|拿|坐|站|躺|挂|掛|放|带|帶|睡|看|听|聽|记|記|留|等|亮|笑|哭|抱|举|舉|锁|鎖)(?:着|著)/, trig: "着" },
   { tpl: "Progressive 在/正在", detect: /正在/, trig: "正在" },
   // —— 助词 ——
   { tpl: "Adverbial 地", detect: /[一-龥]地[一-龥]/, trig: "地" },
   { tpl: "Degree complement 得", detect: /[一-龥]得[一-龥]/, trig: "得" },
   // —— 疑问 ——
-  { tpl: "Alternative question 还是", detect: /还是[^。]{0,10}[？?]|[一-龥]还是[一-龥]/, trig: "还是" },
+  { tpl: "Alternative question 还是", detect: /(?:还是|還是)[^。]{0,10}[？?]|[一-龥](?:还是|還是)[一-龥]/, trig: "还是" },
   { tpl: "Yes/no question 吗", detect: /吗|嗎/, trig: "吗" },
   { tpl: "Follow-up particle 呢", detect: /呢[？。]?$|呢？/, trig: "呢" },
   { tpl: "Suggestion particle 吧", detect: /吧[？。！]?$|吧！/, trig: "吧" },
-  { tpl: "A-not-A question", detect: /([去来是有能会會要好對对贵貴累忙冷热熱大小])不\1|是不是|有没有|有沒有/, trig: "A不A" },
+  { tpl: "A-not-A question", detect: /([去来來是有能会會要好對对贵貴累忙冷热熱大小])不\1|是不是|有没有|有沒有/, trig: "A不A" },
   { tpl: "Question word 什么", detect: /什么|什麼/, trig: "什么" },
   { tpl: "Question word 谁", detect: /谁|誰/, trig: "谁" },
   { tpl: "Question words 哪儿/哪里", detect: /哪儿|哪裡|哪里|哪兒/, trig: "哪里" },
@@ -1363,22 +1369,26 @@ const G_RULES = [
   { tpl: "为了…", detect: /^为了|^為了|，为了|，為了/, trig: "为了" },
   // —— 重叠 ——
   { tpl: "太…了", detect: /太[^，。！？]{1,5}了/, trig: "太" },
-  { tpl: "Adjective predicate 很", detect: /(?:(?<![不也還还])很|非常|特别|特別|十分|挺|真)(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏臟乱亂静靜棒帅]/, trig: "很" },
-  { tpl: "Verb reduplication VV/V一V", detect: /([看說说試试想聽听走坐歇等嘗尝玩問问找數数讀读寫写聊笑摸聞闻瞧逛轉转動动搖摇談谈聚考察]){2}|([看说想试听走坐尝玩问找读写])一\2/, trig: "重叠" },
+  { tpl: "Adjective predicate 很", detect: /(?:(?<![不也還还])很|非常|特别|特別|十分|挺|真)(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏髒乱亂静靜棒帅]/, trig: "很" },
+  { tpl: "Verb reduplication VV/V一V", detect: /([看說说試试想聽听走坐歇等嘗尝玩問问找數数讀读寫写聊笑摸聞闻瞧逛轉转動动搖摇談谈聚考察])\1|([看說说想試试聽听走坐嘗尝玩問问找讀读寫写])一\2/, trig: "重叠" },
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB", detect: /([一-龥])\1([一-龥])\2/, trig: "AABB" },
   // —— 兼语/连动/双宾(结构性,只校验不轻易补) ——
-  { tpl: "Serial verbs 连动句", detect: /(?:站|坐|躺|趴|靠|蹲|跪)在[一-龥]{1,4}(?:看|听|聽|吃|喝|读|讀|写|寫|玩|做|说|說|等|想|休息|工作)|(?:去|来|來)[一-龥]{1,4}(?:买|買|吃|喝|看|玩|找|见|見|办|辦|拿|取|学|學|上课|上課|工作|做|参加|參加|旅游|旅遊|购物|購物|散步|开会|開會|参观|參觀|游玩|度假|办事|辦事|锻炼|鍛煉|见面|見面|报到|報到|签到|簽到|取钱|取錢|逛)/, trig: "连动" },
+  { tpl: "Serial verbs 连动句", detect: /(?:站|坐|躺|趴|靠|蹲|跪)在[一-龥]{1,4}(?:看|听|聽|吃|喝|读|讀|写|寫|玩|做|说|說|等|想|休息|工作)|(?:去|来|來)[一-龥]{1,4}(?:买|買|吃|喝|看|玩|找|见|見|办|辦|拿|取|学|學|上课|上課|工作|做|参加|參加|旅游|旅遊|购物|購物|散步|开会|開會|参观|參觀|游玩|遊玩|度假|办事|辦事|锻炼|鍛煉|见面|見面|报到|報到|签到|簽到|取钱|取錢|逛)/, trig: "连动" },
   { tpl: "Double objects", detect: /(?:给|給|送|教|问|問|告诉|告訴|递|遞|借|还|還)(?:了|给|給)?[我你他她您它们們人][一-龥]/, trig: "双宾" },
   // —— 了(模型基本都给,只校验) ——
   { tpl: "Completion 了", detect: /了/, trig: "了", noAdd: true },
   { tpl: "Change-of-state 了", detect: /了[。！？]?$|了！/, trig: "了", noAdd: true },
   { tpl: "Location 在 + place + V", detect: /(?<![站坐躺住放挂掛趴靠摆擺现現正])在[一-龥]{1,5}(?:看|工作|学习|學習|上班|上课|上課|吃|睡|玩|住|等|做|开会|開會|买|買|读|讀|写|寫|听|聽|运动|運動|锻炼|鍛煉|见面|見面|休息|拍照|拍|散步|唱歌|跳舞|聊天|上网|上網|打球|画|畫|游泳|做饭|做飯)/, trig: "在" },
-  { tpl: "Negation 没 + V + complement", detect: /没[一-龥](?:完|到|懂|见|見|好|错|錯|上|下|出|回|过|過|清|住|够|夠|起来|下去|出来|出來)|沒[一-龥](?:完|到|懂|見|好|錯|清|住)/, trig: "没", noAdd: true },
+  { tpl: "Negation 没 + V + complement", detect: /没[一-龥](?:完|到|懂|见|見|好|错|錯|上|下|出|回|过|過|清|住|够|夠|起来|下去|出来|出來)|沒[一-龥](?:完|到|懂|見|好|錯|上|下|出|回|過|清|住|夠|起來|下去|出來)/, trig: "没", noAdd: true },
   { tpl: "Negation 没(有)", detect: /没|沒/, trig: "没", noAdd: true },
   { tpl: "Time before verb", detect: /每天|每周|每週|每年|每月|经常|經常|常常|总是|總是|有时(?!间)|有時(?!間)|偶尔|偶爾/, trig: "时间语序" },
 ];
 const G_BY_TPL = new Map(G_RULES.map(r => [r.tpl, r]));
+// 规则命中判定:先把 deny 里的固定词从句子里「抠掉」,再拿剩下的判 detect。
+// 不能整句判 deny —— 「对不起,我听不懂你说的话。」里 对不起 该屏蔽,
+// 但 听不懂 是真的可能补语,整句判会把它一起丢掉。
+const matchesRule = (r, text) => r.detect.test(r.deny ? text.replace(r.deny, "") : text);
 // 家族别名:模型返回的变体名 → 归一到规则表里的代表名(共享 detect)
 const G_FAMILY = {
   "把 + 在/到 + place": "把 sentence: basic", "把 + 给": "把 sentence: basic", "把 + 成/作": "把 sentence: basic", "Negation before 把": "把 sentence: basic",
@@ -1414,9 +1424,10 @@ function correctGrammarPoints(points, translation) {
         !/[了过過][一-龥]/.test(translation.replace(/了[。！？!?]?$/, ""))) {
       name = "Change-of-state 了";
     }
-    // 校验:该模板有 detect 规则但译文不中 → 模型幻觉,丢
+    // 校验:该模板有 detect 规则但译文不中 → 模型幻觉,丢;
+    // deny 命中 → 是固定词/普通否定被 detect 误伤(如 对不起 撞上 V不C),同样丢。
     const rule = G_BY_TPL.get(name);
-    if (rule && !rule.detect.test(translation)) continue;
+    if (rule && !matchesRule(rule, translation)) continue;
     if (!KNOWN.has(name)) continue;   // 白名单(丢 name 兜底乱造的)
     out.push({ name, triggerWords });
   }
@@ -1424,7 +1435,7 @@ function correctGrammarPoints(points, translation) {
   const have = new Set(out.map(p => p.name));
   for (const r of G_RULES) {
     if (r.noAdd || have.has(r.tpl)) continue;
-    if (r.detect.test(translation)) { out.push({ name: r.tpl, triggerWords: [r.trig] }); have.add(r.tpl); }
+    if (matchesRule(r, translation)) { out.push({ name: r.tpl, triggerWords: [r.trig] }); have.add(r.tpl); }
   }
   // ③ 同名去重 + 封顶 6
   const seen = new Map();
