@@ -77,6 +77,18 @@ const CASES = [
   ["我在吃饭。",           ["Progressive 在/正在"], []],
   ["他在看书。",           ["Progressive 在/正在"], []],
   ["我正在工作。",         ["Progressive 在/正在"], []],
+
+  // —— 本轮:很 的兜底分支 / 没…过 / 不比 ——
+  ["这里很舒服。",          ["Adjective predicate 很"], []],
+  ["我很满意。",            ["Adjective predicate 很"], []],
+  ["这个菜很新鲜。",         ["Adjective predicate 很"], []],
+  ["我很累。",              ["Adjective predicate 很"], []],
+  ["我很想去。",            [], ["Adjective predicate 很"]],
+  ["他很喜欢你。",          [], ["Adjective predicate 很"]],
+  ["我没去过北京。",         ["Negation 没…过"], ["Experience 过"]],
+  ["我去过北京。",          ["Experience 过"], ["Negation 没…过"]],
+  ["今天不比昨天热。",       ["不比 (not more than)"], ["Comparison 比"]],
+  ["今天比昨天热。",         ["Comparison 比"], ["不比 (not more than)"]],
 ];
 let bad=0;
 for (const [t, must, mustNot] of CASES) {

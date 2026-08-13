@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.37";
+const ZH_VERSION = "v3.38";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -1328,13 +1328,17 @@ const G_RULES = [
   // —— 比较 ——
   { tpl: "越来越", detect: /越来越|越來越/, trig: "越来越" },
   { tpl: "越…越…", detect: /越(?!来|來)[^。！？]{1,6}越/, trig: "越" },
-  { tpl: "Comparison 比", detect: /[一-龥]比[一-龥]/, trig: "比" },
+  { tpl: "不比 (not more than)", detect: /不比[一-龥]/, trig: "不比" },
+  { tpl: "Comparison 比", detect: /[一-龥]比[一-龥]/, deny: /不比/g, trig: "比" },
   { tpl: "Equality 跟…一样", detect: /(?:跟|和|与|與)[^，。]{1,8}(?:一样|一樣)/, trig: "一样" },
   { tpl: "Negative comparison 没有", detect: /(?:没有|沒有)[^，。]{1,8}(?:那么|那麼|这么|這麼|高|大|好|多|重)/, trig: "没有" },
   { tpl: "Superlative 最", detect: /最[一-龥]/, trig: "最" },
   { tpl: "Distance 离", detect: /(?:离|離)[一-龥]{1,6}(?:很|不|太|近|远|遠|有)/, trig: "离" },
   // —— 体标记 ——
-  { tpl: "Experience 过", detect: /[一-龥](?:过|過)(?![来來去程分度])(?=[了吗嗎？。！，]|$|[一-龥])/, trig: "过" },
+  { tpl: "Negation 没…过", detect: /(?:没|沒)(?:有)?[^，。！？]{0,4}(?:过|過)(?![来來去程分度])/, trig: "没…过" },
+  { tpl: "Experience 过", detect: /[一-龥](?:过|過)(?![来來去程分度])(?=[了吗嗎？。！，]|$|[一-龥])/,
+    // 否定式归「没…过」那条,别让肯定用法的卡片盖上去
+    deny: /(?:没|沒)(?:有)?[^，。！？]{0,4}(?:过|過)/g, trig: "过" },
   { tpl: "Continuing state 着", detect: /(?:开|開|关|關|穿|戴|拿|坐|站|躺|挂|掛|放|带|帶|睡|看|听|聽|记|記|留|等|亮|笑|哭|抱|举|舉|锁|鎖)(?:着|著)/, trig: "着" },
   { tpl: "Progressive 在/正在",
     // 之前只认「正在」,于是「我在吃饭」这类最常见的进行句一个语法点都没有。
@@ -1379,7 +1383,13 @@ const G_RULES = [
   { tpl: "为了…", detect: /^为了|^為了|，为了|，為了/, trig: "为了" },
   // —— 重叠 ——
   { tpl: "太…了", detect: /太[^，。！？]{1,5}了/, trig: "太" },
-  { tpl: "Adjective predicate 很", detect: /(?:(?<![不也還还])很|非常|特别|特別|十分|挺|真)(?![多少])[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏髒乱亂静靜棒帅]/, trig: "很" },
+  { tpl: "Adjective predicate 很",
+    // 两条分支:① 常见单音形容词表(原样保留,精确)
+    //          ② 兜底 —— 程度副词 + 1~3 字 + 句末/标点,覆盖表外形容词(舒服/满意/新鲜…)
+    // deny 排掉「很+动词/能愿」这类不是形容词谓语的组合(很想去/很喜欢/很需要)。
+    detect: /(?:(?<![不也還还])很|非常|特别|特別|十分|挺|真)(?![多少])(?:[累忙热熱冷高大小好漂帅帥美贵貴胖瘦难難甜苦辣咸鹹香臭亮新旧舊快慢远遠近深浅淺厚薄强強弱重轻輕饿餓渴困舒开開心紧緊张張脏髒乱亂静靜棒]|[一-龥]{1,3}(?=[了。！？!?，,、]|$))/,
+    deny: /(?:很|非常|特别|特別|十分|挺|真)(?:想|要|会|會|能|喜欢|喜歡|爱|愛|怕|希望|需要|讨厌|討厭|了解|懂|感谢|感謝|抱歉|同意|支持|关心|關心|担心|擔心|期待|享受|后悔|後悔|在意|相信|羡慕|羨慕)/g,
+    trig: "很" },
   { tpl: "Verb reduplication VV/V一V", detect: /([看說说試试想聽听走坐歇等嘗尝玩問问找數数讀读寫写聊笑摸聞闻瞧逛轉转動动搖摇談谈聚考察])\1|([看說说想試试聽听走坐嘗尝玩問问找讀读寫写])一\2/, trig: "重叠" },
   { tpl: "V + 一下", detect: /[一-龥]一下/, trig: "一下" },
   { tpl: "Adjective reduplication AABB",
@@ -1402,13 +1412,29 @@ const G_BY_TPL = new Map(G_RULES.map(r => [r.tpl, r]));
 // 不能整句判 deny —— 「对不起,我听不懂你说的话。」里 对不起 该屏蔽,
 // 但 听不懂 是真的可能补语,整句判会把它一起丢掉。
 const matchesRule = (r, text) => r.detect.test(r.deny ? text.replace(r.deny, "") : text);
+// 简→繁触发词对照:繁體译文里要划下划线的是 著/過/會 而不是 着/过/会
+const TRIG_HANT = { "吗":"嗎","会":"會","让":"讓","见":"見","过":"過","着":"著","没":"沒","错":"錯",
+  "离":"離","还是":"還是","一样":"一樣","没有":"沒有","什么":"什麼","谁":"誰","怎么":"怎麼",
+  "哪里":"哪裡","应该":"應該","虽然":"雖然","因为":"因為","连":"連","为了":"為了","越来越":"越來越",
+  "没…过":"沒…過","几/多少":"幾/多少","次/遍":"次/遍","来/去":"來/去" };
+// 只在「这个词确实出现在译文里」时才给触发词。
+// 给不出就返回空数组 —— App 的触发词行遇到空数组会整行隐藏,好过显示一个句子里没有的标签。
+function trigFor(r, translation) {
+  const cands = [r.trig, TRIG_HANT[r.trig]].filter(Boolean);
+  for (const c of cands) {
+    // 「A…B」形式的标签取首段比对(没…过 → 没)
+    const head = c.split("…")[0];
+    if (head && translation.includes(head)) return [c];
+  }
+  return [];
+}
 // 家族别名:模型返回的变体名 → 归一到规则表里的代表名(共享 detect)
 const G_FAMILY = {
   "把 + 在/到 + place": "把 sentence: basic", "把 + 给": "把 sentence: basic", "把 + 成/作": "把 sentence: basic", "Negation before 把": "把 sentence: basic",
   "Passive 被 without doer": "Passive 被", "Passive 让/叫": "Pivotal 兼语句", "Negation before 被": "Passive 被",
   "Modal 要 (want/going to)": "Modal 要 (want/going to)",
-  "比 + degree": "Comparison 比", "不比 (not more than)": "Comparison 比",
-  "Negation 没…过": "Experience 过", "V1着 V2": "Continuing state 着", "Existential V着": "Continuing state 着",
+  "比 + degree": "Comparison 比",
+  "V1着 V2": "Continuing state 着", "Existential V着": "Continuing state 着",
   "Question particle 吗": "Yes/no question 吗", "V过没有 question": "A-not-A question",
   "Verb reduplication V了V": "Verb reduplication VV/V一V",
   "Degree complement 得很/极了": "Degree complement 得",
@@ -1448,7 +1474,7 @@ function correctGrammarPoints(points, translation) {
   const have = new Set(out.map(p => p.name));
   for (const r of G_RULES) {
     if (r.noAdd || have.has(r.tpl)) continue;
-    if (matchesRule(r, translation)) { out.push({ name: r.tpl, triggerWords: [r.trig] }); have.add(r.tpl); }
+    if (matchesRule(r, translation)) { out.push({ name: r.tpl, triggerWords: trigFor(r, translation) }); have.add(r.tpl); }
   }
   // ③ 同名去重 + 封顶 6
   const seen = new Map();
