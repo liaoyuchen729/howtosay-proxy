@@ -382,7 +382,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v47-recover";
+const SERVER_BUILD = "v48-recover2";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -410,7 +410,9 @@ const IRREGULAR_FORMS = {
 };
 // 缩写词 / 所有格占位:展开形式与缩写互通
 const TOKEN_ALT = {
-  "can't":["can't","cannot","can not"], "won't":["won't","will not"],
+  // can't ↔ couldn't:同一结构的时态变体(can't help doing / couldn't help laughing),
+  // 只用于这类固定短语模板的匹配,不影响 can / could 各自独立的模板
+  "can't":["can't","cannot","can not","couldn't","could not"], "won't":["won't","will not"],
   "i'd":["i'd","i would","i had"], "you'd":["you'd","you would","you had"],
   "it's":["it's","it is","it has"], "i'm":["i'm","i am"],
   "would've":["would've","would have"],
