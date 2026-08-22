@@ -72,10 +72,14 @@ function styleDesc(style) {
         "Examples: 'I am extremely tired today.' / 'Would you care to join me for a film, should you have the time?' / " +
         "'I am not fond of sea urchin.' / 'She is a remarkably gentle person.'";
     case "concise":
-      return "telegraphic — as short and punchy as possible while keeping the core meaning, and clearly shorter " +
-        "than the standard version. Drop optional words, articles, and subjects when natural. " +
-        "Use the fewest words possible — under 6 words when feasible. " +
-        "Examples: 'So tired today.' / 'Movie later?' / 'Not a fan of sea urchin.' / 'She's super kind.'";
+      return "short and punchy — clearly shorter than the standard version while keeping the core meaning. " +
+        "Trim filler, hedges and redundant words; an elliptical fragment is fine for a SHORT single-clause " +
+        "thought ('So tired today.' / 'Movie later?' / 'Not a fan of sea urchin.'). " +
+        "HARD RULE: the result must still be English a native speaker would actually say or write. " +
+        "Never drop the subject or auxiliary inside a multi-clause sentence — conditionals, comparisons and " +
+        "reported speech keep their subjects: 'If I'd known, I wouldn't have done it.' is correct; " +
+        "'If knew earlier, wouldn't do.' is WRONG and must never be produced. " +
+        "Learners copy this sentence, so broken grammar is worse than a few extra words.";
     default:
       return "standard, neutral, textbook-natural English — what a typical learner would expect. Balanced, " +
         "no contractions in writing but not stiff. Examples: 'I am very tired today.' / 'Would you like to " +
@@ -367,7 +371,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v44-logfix";
+const SERVER_BUILD = "v45-baseline";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -557,6 +561,71 @@ async function callOpenAI(body) {
   }
 }
 
+
+// ============= 确定性语法基线(纯规则,零 API、零延迟)=============
+// 目的:模型偶尔对简单句一条语法都不报(实测约 25%),但学习者恰恰最需要这些基础点。
+// 做法:只看英文译文,用正则识别时态/句式/词法,命中的一律映射到已有模板名 ——
+//      App 拿到模板名就直接用本地多语言详解,不额外花钱也不增加等待。
+// 策略:模型报得越少,补得越多(0 条补 2 条,1 条补 1 条,≥2 条不补),避免噪音。
+const IRREG_PAST = new Set(["was","were","had","did","said","made","went","took","came","saw","knew","got","gave","found","thought","told","became","left","felt","brought","began","kept","held","wrote","stood","heard","let","meant","met","ran","paid","sat","spoke","lay","led","read","grew","lost","fell","sent","built","understood","drew","broke","spent","cut","rose","drove","bought","wore","chose","ate","forgot","slept","won","taught","caught","sold","flew","put","drank","swam","woke","hit"]);
+const PP_IRREG = new Set(["been","done","gone","seen","taken","given","known","made","written","spoken","broken","chosen","eaten","forgotten","gotten","driven","fallen","found","held","kept","left","lost","met","paid","put","read","run","said","sent","sold","sung","sat","slept","spent","stood","taught","told","thought","understood","worn","won"]);
+const isPP = w => PP_IRREG.has(w) || /^[a-z]+ed$/.test(w);
+const isVing = w => /^[a-z]{3,}ing$/.test(w);
+
+function baselineGrammar(translation) {
+  const tl = String(translation || "");
+  if (!tl.trim()) return [];
+  const low = tl.toLowerCase();
+  const toks = low.match(/[a-z']+/g) || [];
+  if (toks.length < 2) return [];                    // 单词/感叹词:本来就没有句子语法
+  const has = (re) => re.test(low);
+  const out = [];
+  const add = (name, trig) => {
+    const t = trig.filter(x => new RegExp(`(^|[^a-z])${x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}([^a-z]|$)`,"i").test(low));
+    if (t.length) out.push({ name, triggerWords: t, isTemplate: true });
+  };
+  // —— 句式(最值得先讲)——
+  const m1 = low.match(/\b(what|where|when|who|whom|whose|why|how)\b/);
+  if (m1 && /\?\s*$/.test(tl)) add("特殊疑问句(wh-)", [m1[1]]);
+  else if (/\?\s*$/.test(tl) && /^(do|does|did|is|are|am|was|were|can|could|will|would|should|have|has)\b/.test(low)) add("一般疑问句(yes/no)", [toks[0]]);
+  if (/\bthere\s+(is|are|was|were)\b/.test(low)) add("There be 句型", ["there", (low.match(/\bthere\s+(is|are|was|were)\b/)||[])[1]]);
+  // —— 被动 ——
+  const mp = low.match(/\b(am|is|are|was|were)\s+([a-z]+)\b/);
+  if (mp && isPP(mp[2]) && !isVing(mp[2])) add(/^(was|were)$/.test(mp[1]) ? "一般过去被动" : "一般现在被动", [mp[1], mp[2]]);
+  // —— 完成 / 进行 / 将来 ——
+  const mperf = low.match(/\b(have|has|had)\s+(?:not\s+|never\s+)?([a-z]+)\b/);
+  if (mperf && isPP(mperf[2])) add(mperf[1]==="had" ? "过去完成时" : "现在完成时", [mperf[1], mperf[2]]);
+  const mcont = low.match(/\b(am|is|are|was|were|'m|'s|'re)\s+([a-z]+ing)\b/);
+  if (mcont) add(/^(was|were)$/.test(mcont[1]) ? "过去进行时" : "现在进行时", [mcont[1], mcont[2]]);
+  if (/\b(am|is|are|'m|'s|'re)\s+going\s+to\s+[a-z]+/.test(low)) add("一般将来时(be going to)", ["going","to"]);
+  else if (/\b(will|won't|'ll)\s+[a-z]+/.test(low)) add("一般将来时(will)", [(low.match(/\b(will|won't)\b/)||["","will"])[1]]);
+  // —— 情态 ——
+  const MODALS = { can:"can(能力 / 可能)", could:"could(过去能力 / 委婉请求)", should:"should(应该 / 建议)",
+                   must:"must(必须 / 肯定推断)", may:"may(许可 / 可能)" };
+  for (const [w, name] of Object.entries(MODALS)) if (has(new RegExp(`\\b${w}\\b`))) { add(name, [w]); break; }
+  // —— 比较 ——
+  if (/\b([a-z]+er|more|less|better|worse)\s+(?:[a-z]+\s+)?than\b/.test(low)) {
+    const m = low.match(/\b([a-z]+er|more|less|better|worse)\s+(?:[a-z]+\s+)?than\b/);
+    add("比较级 + than", [m[1], "than"]);
+  } else if (/\bthe\s+(?:most|least|[a-z]+est)\b/.test(low)) add("最高级 + in / of", [(low.match(/\b(most|least|[a-z]+est)\b/)||[])[1]]);
+  // —— 不定式 ——
+  if (/\bto\s+(go|come|see|get|do|make|buy|eat|visit|take|meet|learn|work|study|play|help|find|start|try)\b/.test(low)) {
+    const m = low.match(/\bto\s+([a-z]+)\b/); add("不定式作目的状语", ["to", m[1]]);
+  }
+  // —— 连词 ——
+  const mc = low.match(/\b(but|and|so|or|yet)\b/);
+  if (mc) add("并列连词(and / but / or / so / yet)", [mc[1]]);
+  // —— 时态兜底:没有任何时态点时,判定一般过去 / 一般现在 ——
+  const hasTense = out.some(o => /时$|将来时|完成时|进行时|被动/.test(o.name));
+  if (!hasTense) {
+    const past = toks.find(w => IRREG_PAST.has(w) || (/^[a-z]{3,}ed$/.test(w) && !isPP(w) === false));
+    if (past) add("一般过去时", [past]);
+    else add("一般现在时", [toks.find(w => /^(is|am|are|do|does|have|has|want|know|like|need|think|go|goes|works?)$/.test(w)) || toks[1]]);
+  }
+  // —— 词法(排在最后,最基础)——
+  if (/\b(a|an)\b/.test(low)) add("a / an(不定冠词)", [(low.match(/\b(a|an)\b/)||[])[1]]);
+  return out;
+}
 
 // 同名语法点合并:模型有时把一个语法(如第三条件句)按从句/主句拆成两条 →
 // 合并成一条,触发词取并集(顺序保持首次出现)。补充步骤跑完后要再合一次。
@@ -1653,6 +1722,27 @@ app.post("/translate", async (req, res) => {
       }
       if (fixCount > 0 && process.env.LOG_FIXUPS) console.log(`fixed ${fixCount} spans`);
     }
+    // ②.8 确定性基线:模型少报/漏报时用规则补齐(实测简单句约 25% 一条都不报)。
+    //     报得越少补得越多:0 条补 2 条,1 条补 1 条,≥2 条不补 —— 既不留空也不制造噪音。
+    if (Array.isArray(parsed.grammarPoints) && !wantWordsOnly && typeof parsed.translation === "string") {
+      const need = parsed.grammarPoints.length === 0 ? 2 : (parsed.grammarPoints.length === 1 ? 1 : 0);
+      if (need > 0) {
+        const have = new Set(parsed.grammarPoints.map(g => String(g.name || "").trim().toLowerCase()));
+        const haveTrig = new Set(parsed.grammarPoints.flatMap(g => (g.triggerWords || []).map(t => String(t).toLowerCase())));
+        let added = 0;
+        for (const b of baselineGrammar(parsed.translation)) {
+          if (added >= need) break;
+          if (have.has(b.name.trim().toLowerCase())) continue;
+          // 触发词已被现有语法点占用 → 说明同一处已有解说,不重复补
+          if (b.triggerWords.every(t => haveTrig.has(String(t).toLowerCase()))) continue;
+          parsed.grammarPoints.push(b);
+          added++;
+        }
+        if (added > 0) console.log(JSON.stringify({ evt: "grammar_baseline", added, lang: sourceLanguage,
+          tlSample: String(parsed.translation).slice(0, 80), ts: new Date().toISOString() }));
+      }
+    }
+
     // 补充步骤(比较级/结构检测/一致性兜底)可能又插入同名点 → 收尾再合并一次
     if (Array.isArray(parsed.grammarPoints)) parsed.grammarPoints = mergeGrammarPoints(parsed.grammarPoints);
 
