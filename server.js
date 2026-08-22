@@ -65,12 +65,17 @@ function styleDesc(style) {
         "casual means natural WORDING, not ADDED content. Translate only what the source says. " +
         "Examples: 'I'm super tired today.' / 'Wanna grab a movie?' / 'Nah, not into sea urchin.'";
     case "formal":
-      return "formal, polished, and polite — the way you would write a professional email or speak in a business " +
-        "setting. Use an elevated register clearly more elaborate than the standard version. " +
-        "NEVER use contractions (use I am, do not, will not). Prefer full, refined vocabulary (would like to, " +
-        "I am afraid that, regarding, indeed, shall). Use complete, well-structured sentences. " +
-        "Examples: 'I am extremely tired today.' / 'Would you care to join me for a film, should you have the time?' / " +
-        "'I am not fond of sea urchin.' / 'She is a remarkably gentle person.'";
+      return "formal and polished — the English of a well-written work email or a professional conversation. " +
+        "NEVER use contractions (use I am, do not, will not). Choose precise, courteous wording " +
+        "(would like to, could you please, regarding, unfortunately) and complete, well-structured sentences. " +
+        "It must read clearly more formal than the standard version WITHOUT becoming pompous or archaic. " +
+        "Do NOT add ceremony the source does not have: a plain statement stays a plain statement, only more polished. " +
+        "'I will be traveling to Nankunshan tomorrow.' is right; " +
+        "'I would like to inform you that I shall be traveling to Nankunshan tomorrow.' is over-the-top and WRONG. " +
+        "Avoid shall / should you have the time / I am afraid that / I regret to inform you unless the source " +
+        "itself carries that much hedging or ceremony. " +
+        "Examples: 'I am rather tired today.' / 'Would you like to watch a film together?' / " +
+        "'I am not fond of sea urchin.' / 'She is a remarkably kind person.'";
     case "concise":
       return "short and punchy — clearly shorter than the standard version while keeping the core meaning. " +
         "Trim filler, hedges and redundant words; an elliptical fragment is fine for a SHORT single-clause " +
@@ -371,7 +376,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v45-baseline";
+const SERVER_BUILD = "v46-tone-telemetry";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -2003,6 +2008,19 @@ const grammarDetailSchema = {
 };
 // 用户翻译反馈:App 翻译卡的「报告问题」按钮上报,进 Axiom 月度分析。
 // body: { sourceText, translation, sourceLanguage, style, category, flaggedWords[], detail, alignment[{en,span,pos}] }
+// 最近反馈的内存缓冲:Axiom 摄取 token 若失效仍能随时查看(容量 200,进程重启清空)
+const feedbackBuffer = [];
+const FEEDBACK_BUFFER_MAX = 200;
+
+// 拉取最近反馈(需鉴权,和 App 用同一把 X-App-Key)。?limit=50
+app.get("/feedback-recent", (req, res) => {
+  if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, FEEDBACK_BUFFER_MAX);
+  res.json({ count: feedbackBuffer.length, items: feedbackBuffer.slice(-limit).reverse() });
+});
+
 app.post("/feedback", async (req, res) => {
   try {
     if (APP_SHARED_SECRET && req.get("X-App-Key") !== APP_SHARED_SECRET) {
@@ -2028,6 +2046,8 @@ app.post("/feedback", async (req, res) => {
     };
     console.log(JSON.stringify(evt));
     sendToAxiom(evt);
+    feedbackBuffer.push(evt);
+    if (feedbackBuffer.length > FEEDBACK_BUFFER_MAX) feedbackBuffer.shift();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -2060,6 +2080,13 @@ app.post("/word-definition", async (req, res) => {
     cacheSweep();
     // v2:加入"按词性/语境给多义、语境义优先"的口径,旧的单义缓存自动失效
     const key = `${lang}|v2|${String(english).trim().toLowerCase()}|${String(partOfSpeech)}`;
+    // 埋点:用户实际点开了哪些词(纯日志,不影响返回);用于分析高频词、有针对性地优化释义
+    {
+      const evt = { evt: "word_lookup", w: String(english).trim().slice(0, 40),
+                    pos: String(partOfSpeech || "").slice(0, 20), lang, ts: new Date().toISOString() };
+      console.log(JSON.stringify(evt));
+      sendToAxiom(evt);
+    }
     const hit = defCache.get(key);
     if (hit) return res.json(hit);
 
