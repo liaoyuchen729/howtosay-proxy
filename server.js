@@ -367,7 +367,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v43-grammar";
+const SERVER_BUILD = "v44-logfix";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -815,7 +815,9 @@ app.post("/translate", async (req, res) => {
     // 两段式:第一段译文已展示给用户,这里硬覆盖,杜绝两段不一致
     if (fixedTranslation) parsed.translation = fixedTranslation;
     // 日志埋点:fallback 高频统计 → ① console(Railway 原生面板)② Axiom(可聚合 SQL)
-    if (Array.isArray(parsed.grammarPoints)) {
+    // 注意:parts:"words" 的请求压根没跑语法标注(grammarPoints 恒为空),
+    // 不能把它算成"模型没识别出语法",否则 grammar_none 全是假数据、月度扩模板管道会被带偏。
+    if (Array.isArray(parsed.grammarPoints) && !wantWordsOnly) {
       for (const g of parsed.grammarPoints) {
         const tk = (g.templateKey || "").trim();
         if (!tk) {
