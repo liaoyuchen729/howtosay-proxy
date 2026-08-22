@@ -310,6 +310,12 @@ function promptGrammarRules(lang) {
     `["prefer", "to"] for "prefer X to Y"; ["way", "worse", "than"] for "way worse than" (do NOT omit "than"); ` +
     `["as", "soon", "as"] for "as soon as"; ["had", "better"] for "had better". ` +
     `Every triggerWord must be literally present in your translation.\n` +
+    `  NEVER invent these as grammar points — they teach nothing and must be omitted entirely: ` +
+    `a bare part-of-speech or phrase-type label ("noun phrase", "prepositional phrase", "interjection", ` +
+    `"greeting", "adjective"), or any name that says the sentence has no structure ` +
+    `("long sentence without specific grammar", "no notable grammar"). ` +
+    `If the only thing you can name is one of those, report the sentence's TENSE instead — every finite ` +
+    `sentence has one. A grammar point must be a PATTERN a learner can reuse in other sentences.\n` +
     `  • name: if templateKey != "" → "". If templateKey == "" → a short grammar-point name IN ${lang} ` +
     `(e.g. "prefer X to Y 句型"). Do NOT write any explanation here — details are fetched separately.\n\n` +
     `Any ${lang} text (e.g. fallback grammar-point names) MUST be written in ${lang}, never in any other language.`;
@@ -376,7 +382,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v46-tone-telemetry";
+const SERVER_BUILD = "v47-recover";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -964,6 +970,31 @@ app.post("/translate", async (req, res) => {
         }
         return { name: g.name || "未命名", triggerWords: g.triggerWords || [], isTemplate: false };
       });
+    }
+
+    // ①.0 fallback 回收:模型自造名里有一半其实库里就有(忍不住做某事=can't help doing、
+    //      感叹句、并列连词、不定式作宾语补足语…)。用【触发词 + 本次译文】双重匹配反查模板,
+    //      命中就转成模板点 → App 直接用本地多语言详解(结构图+例句),零 API 且质量稳定。
+    if (Array.isArray(parsed.grammarPoints) && typeof parsed.translation === "string") {
+      const tplCheckTl = makeTemplateMatcher(String(parsed.translation));
+      for (const g of parsed.grammarPoints) {
+        if ((g.templateKey || "").trim()) continue;                 // 已经是模板点
+        const trigs = (g.triggerWords || []).map(t => String(t).trim()).filter(Boolean);
+        if (trigs.length === 0) continue;
+        const trigText = trigs.join(" ");
+        const tplCheckTrig = makeTemplateMatcher(trigText);
+        // 模板的完整词组必须同时出现在「触发词串」和「整句译文」里,双保险防误配
+        const tpl = TEMPLATE_NAMES.find(n => {
+          const alts = String(n).split(/\/|(?:^|\s)vs(?:\s|$)/i).map(tplPhraseRuns);
+          if (!alts.some(a => a.length > 0)) return false;          // 纯中文名不参与反查
+          return tplCheckTrig(n) && tplCheckTl(n);
+        });
+        if (tpl) {
+          console.log(JSON.stringify({ evt: "fallback_recovered", from: g.name || "", to: tpl,
+                                       lang: sourceLanguage, ts: new Date().toISOString() }));
+          g.templateKey = tpl;                                       // 交给下面 ① 统一转成规范名
+        }
+      }
     }
 
     // ①.1 先合一次同名语法点(让后续"是否已覆盖"的判断看到完整触发词)
