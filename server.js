@@ -382,7 +382,7 @@ const schema = {
 };
 
 // 健康检查
-const SERVER_BUILD = "v48-recover2";
+const SERVER_BUILD = "v49-recover3";
 app.get("/", (_req, res) => res.send(`How to Say proxy: OK ${SERVER_BUILD}`));
 
 
@@ -980,7 +980,7 @@ app.post("/translate", async (req, res) => {
     if (Array.isArray(parsed.grammarPoints) && typeof parsed.translation === "string") {
       const tplCheckTl = makeTemplateMatcher(String(parsed.translation));
       for (const g of parsed.grammarPoints) {
-        if ((g.templateKey || "").trim()) continue;                 // 已经是模板点
+        if (g.isTemplate) continue;                                  // 已经是模板点(① 已把 templateKey 转成规范名)
         const trigs = (g.triggerWords || []).map(t => String(t).trim()).filter(Boolean);
         if (trigs.length === 0) continue;
         const trigText = trigs.join(" ");
@@ -994,7 +994,9 @@ app.post("/translate", async (req, res) => {
         if (tpl) {
           console.log(JSON.stringify({ evt: "fallback_recovered", from: g.name || "", to: tpl,
                                        lang: sourceLanguage, ts: new Date().toISOString() }));
-          g.templateKey = tpl;                                       // 交给下面 ① 统一转成规范名
+          // ① 已经跑过,这里直接落地成规范模板点(App 据此走本地详解)
+          g.name = ALIASES[tpl] || tpl;
+          g.isTemplate = true;
         }
       }
     }
