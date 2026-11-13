@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.41";
+const ZH_VERSION = "v3.42";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -47,14 +47,20 @@ function styleDescZh(style) {
         "Drop subjects and objects the way spoken Chinese does. Clearly more relaxed than the standard version. " +
         "Never written-only vocabulary: no \u8fdb\u884c/\u4f5c\u51fa/\u4e88\u4ee5, no \u80fd\u591f, no \u4ecd\u7136, no \u56db\u5b57\u516c\u6587\u5957\u8bed.";
     case "formal":
-      return "MODERN Chinese business / written register — the way a Chinese professional writes to a client, a boss or " +
-        "a teacher TODAY (a work email, a WeChat message to a superior). Complete sentences, no tone particles, no slang.\n" +
-        "        Allowed and encouraged: \u60a8\u3001\u8d35\u3001\u9ebb\u70e6\u60a8\u3001\u52b3\u9a7e\u3001\u70e6\u8bf7\u3001\u4e0d\u597d\u610f\u601d\u3001\u975e\u5e38\u62b1\u6b49\u3001\u975e\u5e38\u611f\u8c22\u3001\u4e0d\u80dc\u611f\u6fc0\u3001\u6050\u6015\u3001\u7a0d\u3001\u7565\u3001\u8c22\u8c22\u3002\n" +
-        "        FORBIDDEN - these are the two ways this style goes wrong:\n" +
-        "        (a) Classical Chinese. Never use \u7136/\u62df/\u5179/\u4e43/\u6b64\u4e3a/\u4ee5\u4e3a\u2026\u4e4b\u7b56/\u7279\u6b64\u2026 or any \u6587\u8a00 particle. " +
-        "\u201c\u4eca\u65e5\u8eab\u4f53\u7565\u611f\u75b2\u60eb\uff0c\u7136\u4ecd\u62df\u524d\u5f80\u8dd1\u6b65\u201d is WRONG; \u201c\u4eca\u5929\u8eab\u4f53\u6709\u4e9b\u75b2\u60eb\uff0c\u4e0d\u8fc7\u8fd8\u662f\u6253\u7b97\u53bb\u8dd1\u6b65\u3002\u201d is right.\n" +
-        "        (b) Reciting set phrases instead of translating. Never insert \u627f\u8499\u5173\u7167/\u96ea\u4e2d\u9001\u70ad/\u656c\u8bf7\u8c05\u89e3 unless the source actually says that. " +
-        "Use AT MOST ONE honorific per clause - \u201c\u70e6\u8bf7\u60a8\u80fd\u5426\u2026\u201d is ungrammatical; write \u201c\u9ebb\u70e6\u60a8\u2026\u201d or \u201c\u60a8\u80fd\u5426\u2026\u201d.";
+      return "MODERN Chinese formal register — a work email or a message to a client, a boss or a teacher TODAY. " +
+        "The formality lives in WORD CHOICE and TONE, not in sentence structure. Keep normal modern Chinese syntax; " +
+        "just pick the more formal word of each pair, and address the person as 您.\n" +
+        "        Upgrade the vocabulary like this: 你→您 · 帮我→麻烦您/烦请您 · 累→疲惫/劳累 · 不好意思→抱歉/非常抱歉 · " +
+        "不太好→恐怕不太合适/不太妥当 · 想→打算/希望 · 主意→想法/方案 · 晚点→晚一些/有所延迟 · 慢点→稍慢一些/放慢速度 · " +
+        "再说一遍→再说明一次 · 谢谢→非常感谢 · 一点→稍/略 · 拍张照→拍一张照片。\n" +
+        "        Two hard rules:\n" +
+        "        (a) It must NOT come out the same as the standard version. If your formal sentence equals the standard one, " +
+        "you have failed — go back and raise the vocabulary. No tone particles (啊/呢/吧), no slang, complete sentences.\n" +
+        "        (b) It must NOT turn into Classical Chinese. Never use 然/拟/兹/乃/此为/之策/特此 or any 文言 particle, and never " +
+        "recite set phrases the source did not say (承蒙关照/雪中送炭/敬请谅解). At most ONE honorific per clause: " +
+        "“烦请您能否…” is ungrammatical — write “麻烦您…” or “您能否…”.\n" +
+        "        “我今天很累，不过还是想去跑步。” is the STANDARD version, not a formal one; " +
+        "formal would be “我今天身体比较疲惫，不过还是打算去跑步。”";
     case "concise":
       return "the shortest thing a real Chinese speaker would still actually say — a quick reply when they are busy. " +
         "Cut every optional word, BUT the result must remain a grammatical, idiomatic sentence: keep the 了/的/吧/啊 that " +
