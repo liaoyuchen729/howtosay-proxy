@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.44";
+const ZH_VERSION = "v3.45";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -257,6 +257,22 @@ const ES_PRONOUNS = ["yo","tú","tu","usted","él","ella","nosotros","nosotras",
 const ZH_PRONOUNS = new Set(["我","你","您","我们","你们","他","她","它","他们","她们","咱们"]);
 const NUM_DEM_CHARS = new Set("一二三四五六七八九十百千万两几半这那哪每");
 const PUNCT_RE = /^[，。？！、,.?!:;:;…\s]+$/;
+
+// —— 译文确定性修正 ——
+// 只处理「模型反复犯、且改法唯一」的病句。prompt 里已明令禁止敬语叠加,
+// 但 v3.42 / v3.44 两轮实测仍然产出「烦请您能否…」,所以在这里兜底。
+// 原则:只删冗余的客套前缀,保留疑问结构(源文是 Could you…? 就该是问句),
+// 不改写语义,不碰其他内容。拿不准的一律不动。
+function fixupZhTranslation(text) {
+  let t = String(text || "");
+  if (!t) return t;
+  // 客套前缀 + 能否/能不能 在同一分句 = 叠加,去掉前缀
+  t = t.replace(/(?:烦请|麻烦|劳驾|有劳)\s*(您|你)?\s*(能否|能不能)/g, (_m, p, q) => (p || "您") + q);
+  // 您能否请您… / 请您能否… = 重复敬语
+  t = t.replace(/(您|你)(能否|能不能)请\1/g, "$1$2");
+  t = t.replace(/请(您|你)(能否|能不能)/g, "$1$2");
+  return t.trim();
+}
 
 function fixupZhAlignment(sourceText, words, srcLang) {
   for (const w of words) if (typeof w.sourceSpan === "string") w.sourceSpan = w.sourceSpan.trim();
@@ -1784,7 +1800,7 @@ export function mountZhRoutes(app, deps) {
         usr(sourceText)
       ]
     });
-    const out = String(JSON.parse(content).translation || "").trim();
+    const out = fixupZhTranslation(String(JSON.parse(content).translation || ""));
     if (out) cachePut(fastCacheZh, ck, out);
     return out;
   }
@@ -1888,6 +1904,7 @@ export function mountZhRoutes(app, deps) {
       // 只读调试:抓修正前原始词块(用于确定性回归,不改变正常响应结构)
       const rawWords = wantRaw ? JSON.parse(JSON.stringify(parsed.words || [])) : null;
       // 词对齐确定性修正(去幻觉/剥助词/合并/去重)—— 见 fixupZhAlignment
+      if (parsed.translation) parsed.translation = fixupZhTranslation(parsed.translation);
       const words = fixupZhAlignment(sourceText, parsed.words || [], sourceLanguage);
       // grammarPoints: templateKey 命中就用它当 name(App 据 name 查本地模板)
       let grammarPoints = (parsed.grammarPoints || []).map(g => ({
