@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.39";
+const ZH_VERSION = "v3.40";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -47,14 +47,14 @@ function styleDescZh(style) {
         "Drop subjects and objects the way spoken Chinese does. Clearly more relaxed than the standard version. " +
         "Never written-only vocabulary: no \u8fdb\u884c/\u4f5c\u51fa/\u4e88\u4ee5, no \u80fd\u591f, no \u4ecd\u7136, no \u56db\u5b57\u516c\u6587\u5957\u8bed.";
     case "formal":
-      return "authentic Chinese formal / business written register — the way a Chinese person actually writes to a client, " +
-        "a boss, a teacher or an institution. Use the Chinese formal repertoire where it genuinely fits: " +
-        "\u60a8/\u8d35/\u70e6\u8bf7/\u656c\u8bf7/\u52b3\u9a7e/\u627f\u8499/\u4e0d\u80dc\u611f\u6fc0/\u591a\u6709\u6253\u6270/\u656c\u8bf7\u8c05\u89e3/\u7279\u6b64\u8bf4\u660e, four-character set phrases, " +
-        "written connectives (\u56e0/\u7531\u4e8e/\u6545/\u73b0/\u5179), and the polite closers Chinese really uses (\u8c22\u8c22/\u611f\u8c22/\u6709\u52b3/\u8f9b\u82e6\u4e86) when the source implies one. " +
-        "\u8fdb\u884c/\u4f5c\u51fa/\u4e88\u4ee5 + noun, \u80fd\u591f, \u4ecd\u7136 are FINE here — they belong to this register. " +
-        "What makes it formal must be CHINESE formality, never an English sentence shape wearing formal Chinese words: " +
-        "\u201c\u6211\u4eca\u5929\u611f\u5230\u975e\u5e38\u75b2\u60eb\uff0c\u4f46\u4ecd\u7136\u5e0c\u671b\u80fd\u591f\u53bb\u8dd1\u6b65\u201d is WRONG; " +
-        "\u201c\u4eca\u65e5\u8eab\u4f53\u7565\u611f\u75b2\u60eb\uff0c\u4f46\u4ecd\u6253\u7b97\u524d\u5f80\u8dd1\u6b65\u201d is the right shape. No tone particles, no slang.";
+      return "MODERN Chinese business / written register — the way a Chinese professional writes to a client, a boss or " +
+        "a teacher TODAY (a work email, a WeChat message to a superior). Complete sentences, no tone particles, no slang.\n" +
+        "        Allowed and encouraged: \u60a8\u3001\u8d35\u3001\u9ebb\u70e6\u60a8\u3001\u52b3\u9a7e\u3001\u70e6\u8bf7\u3001\u4e0d\u597d\u610f\u601d\u3001\u975e\u5e38\u62b1\u6b49\u3001\u975e\u5e38\u611f\u8c22\u3001\u4e0d\u80dc\u611f\u6fc0\u3001\u6050\u6015\u3001\u7a0d\u3001\u7565\u3001\u8c22\u8c22\u3002\n" +
+        "        FORBIDDEN - these are the two ways this style goes wrong:\n" +
+        "        (a) Classical Chinese. Never use \u7136/\u62df/\u5179/\u4e43/\u6b64\u4e3a/\u4ee5\u4e3a\u2026\u4e4b\u7b56/\u7279\u6b64\u2026 or any \u6587\u8a00 particle. " +
+        "\u201c\u4eca\u65e5\u8eab\u4f53\u7565\u611f\u75b2\u60eb\uff0c\u7136\u4ecd\u62df\u524d\u5f80\u8dd1\u6b65\u201d is WRONG; \u201c\u4eca\u5929\u8eab\u4f53\u6709\u4e9b\u75b2\u60eb\uff0c\u4e0d\u8fc7\u8fd8\u662f\u6253\u7b97\u53bb\u8dd1\u6b65\u3002\u201d is right.\n" +
+        "        (b) Reciting set phrases instead of translating. Never insert \u627f\u8499\u5173\u7167/\u96ea\u4e2d\u9001\u70ad/\u656c\u8bf7\u8c05\u89e3 unless the source actually says that. " +
+        "Use AT MOST ONE honorific per clause - \u201c\u70e6\u8bf7\u60a8\u80fd\u5426\u2026\u201d is ungrammatical; write \u201c\u9ebb\u70e6\u60a8\u2026\u201d or \u201c\u60a8\u80fd\u5426\u2026\u201d.";
     case "concise":
       return "the shortest thing a real Chinese speaker would still actually say — a quick reply when they are busy. " +
         "Cut every optional word, BUT the result must remain a grammatical, idiomatic sentence: keep the 了/的/吧/啊 that " +
@@ -85,6 +85,9 @@ const NATURAL_ZH =
   "- Register must be CHINESE register. Formal means the way Chinese officialdom and Chinese business actually write " +
   "(\u70e6\u8bf7/\u656c\u8bf7/\u627f\u8499/\u4e0d\u80dc\u611f\u6fc0/\u7279\u6b64/\u56e0/\u6545 + four-character phrases), NOT an English formal sentence translated word for word. " +
   "Casual means the way Chinese people actually chat, NOT English slang translated.\n" +
+  "- Never add meaning the source does not have (no invented set phrases, no added compliments, no added apologies) " +
+  "and never drop meaning it does have.\n" +
+  "- Always end with proper Chinese punctuation (\u3002 \uff1f \uff01). Use full-width Chinese punctuation throughout.\n" +
   "- Say it out loud in your head. If a Chinese person would never phrase it that way, rewrite it.\n";
 
 // —— 简繁 ——
