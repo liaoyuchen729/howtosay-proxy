@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.42";
+const ZH_VERSION = "v3.44";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -40,36 +40,51 @@ const TEMPLATE_ENUM_ZH = ["", ...TEMPLATE_NAMES_ZH];
 // 写法原则:用「真实场景里中国人会怎么说」来定义,而不是用「正式度」这种抽象标签。
 // 旧写法(textbook / polished vocabulary / fewest characters)正是翻译腔和残句的来源。
 function styleDescZh(style) {
+  // 四档不是英文的 formality 阶梯,而是中文自己的语体坐标。
+  // 中文的语体差异主要落在三个轴上,四档各占一个清晰位置:
+  //   ① 语体轴  口语 ←→ 书面语(双音节化、文言残留虚词、四字格)
+  //   ② 敬语轴  省人称 / 你 / 您 + 客套前缀(麻烦您、烦请)
+  //   ③ 词汇层  同义词的正式度分层:累-疲惫、主意-方案、晚点-延迟、不好-不妥、说-说明
+  // 外加一条经济性(省略程度)。只靠语气词区分 = 没区分。
+  const AXES =
+    "\nCHINESE REGISTER AXES (use these, not an English formality ladder):\n" +
+    "  ① 语体: spoken ←→ written. Spoken Chinese leans on 补语/重叠/语气词/儿化/省略; " +
+    "written Chinese leans on 双音节词、书面连接词、不省略.\n" +
+    "  ② 敬语: omit the pronoun → 你 → 您 + a softening prefix (麻烦您 / 烦请您).\n" +
+    "  ③ 词汇层: Chinese has formality-layered synonyms — 累/疲惫, 主意/方案, 晚点/延迟, " +
+    "不好/不妥, 说/说明, 给/提供, 看/查看, 帮/协助. Moving between styles means moving across THIS layer.\n" +
+    "  Two styles that differ only by a tone particle or 儿化 have NOT moved on any axis = failure.\n";
   switch (style) {
     case "casual":
-      return "what a Chinese friend would actually text you. Spoken rhythm, short clauses, " +
-        "tone particles where a real speaker uses them (啊/呢/吧/嘛/呗), and 就/还/都 as natural fillers. " +
-        "Drop subjects and objects the way spoken Chinese does. Clearly more relaxed than the standard version. " +
-        "Never written-only vocabulary: no \u8fdb\u884c/\u4f5c\u51fa/\u4e88\u4ee5, no \u80fd\u591f, no \u4ecd\u7136, no \u56db\u5b57\u516c\u6587\u5957\u8bed.";
+      return "口语体 — how close friends actually talk and text. Axis ①: strongly spoken. Axis ②: drop the pronoun. " +
+        "Axis ③: the colloquial end.\n" +
+        "        Use SEVERAL of: dropped subject/object; colloquial words (累成狗/没劲/搞/弄/咋/干嘛/贼/特/直接/压根); " +
+        "tone particles 啊/呢/吧/呗/嘛; 儿化; verb reduplication 跑两步/看一眼/说一声/歇会儿; " +
+        "colloquial question endings …行吗？/…成吗？/…不？/…呗？\n" +
+        "        Taking the standard sentence and adding one 啊 is NOT casual — that is a failure. Change the WORDS." + AXES;
     case "formal":
-      return "MODERN Chinese formal register — a work email or a message to a client, a boss or a teacher TODAY. " +
-        "The formality lives in WORD CHOICE and TONE, not in sentence structure. Keep normal modern Chinese syntax; " +
-        "just pick the more formal word of each pair, and address the person as 您.\n" +
-        "        Upgrade the vocabulary like this: 你→您 · 帮我→麻烦您/烦请您 · 累→疲惫/劳累 · 不好意思→抱歉/非常抱歉 · " +
-        "不太好→恐怕不太合适/不太妥当 · 想→打算/希望 · 主意→想法/方案 · 晚点→晚一些/有所延迟 · 慢点→稍慢一些/放慢速度 · " +
-        "再说一遍→再说明一次 · 谢谢→非常感谢 · 一点→稍/略 · 拍张照→拍一张照片。\n" +
-        "        Two hard rules:\n" +
-        "        (a) It must NOT come out the same as the standard version. If your formal sentence equals the standard one, " +
-        "you have failed — go back and raise the vocabulary. No tone particles (啊/呢/吧), no slang, complete sentences.\n" +
-        "        (b) It must NOT turn into Classical Chinese. Never use 然/拟/兹/乃/此为/之策/特此 or any 文言 particle, and never " +
-        "recite set phrases the source did not say (承蒙关照/雪中送炭/敬请谅解). At most ONE honorific per clause: " +
-        "“烦请您能否…” is ungrammatical — write “麻烦您…” or “您能否…”.\n" +
-        "        “我今天很累，不过还是想去跑步。” is the STANDARD version, not a formal one; " +
-        "formal would be “我今天身体比较疲惫，不过还是打算去跑步。”";
+      return "书面正式体 — a work email or a message to a client, a boss or a teacher TODAY. " +
+        "Axis ①: written, not spoken. Axis ②: 您 + a softening prefix. Axis ③: the formal end of each synonym pair.\n" +
+        "        Upgrade like this: 你→您 · 帮我→麻烦您/烦请您 · 累→疲惫 · 不好意思→抱歉/非常抱歉 · " +
+        "不太好→恐怕不太妥当 · 想→打算/希望 · 主意→想法/方案 · 晚点→晚一些/有所延迟 · 慢点→稍慢一些 · " +
+        "说→说明 · 给→提供 · 帮→协助 · 一点→稍/略。No tone particles, no 儿化, no slang, complete sentences.\n" +
+        "        (a) It must NOT equal the standard version. If it does, raise the vocabulary layer.\n" +
+        "        (b) It must NOT become Classical Chinese: never 然/拟/兹/乃/此为/之策/特此 or any 文言 particle, and never " +
+        "recite set phrases the source did not say (承蒙关照/雪中送炭/敬请谅解). At most ONE honorific per clause — " +
+        "“烦请您能否…” is ungrammatical; write “麻烦您…” or “您能否…”." + AXES;
     case "concise":
-      return "the shortest thing a real Chinese speaker would still actually say — a quick reply when they are busy. " +
-        "Cut every optional word, BUT the result must remain a grammatical, idiomatic sentence: keep the 了/的/吧/啊 that " +
-        "Chinese genuinely needs. Never output a clipped fragment no native would say (e.g. \"太感谢\" is wrong; \"太感谢了\" or \"多谢\" is right). " +
-        "It MUST come out clearly SHORTER than the standard version — if it is the same length, you have failed this style.";
+      return "最简体 — the shortest a real speaker would still say: a quick reply when busy. Axis ①: neutral, telegraphic. " +
+        "Economy is the whole point: strip every optional word, keep only what carries the message.\n" +
+        "        It must still be a grammatical, idiomatic sentence — keep the 了/的/吧 Chinese genuinely needs. " +
+        "“太感谢” is wrong; “太感谢了” or “多谢” is right.\n" +
+        "        It MUST come out clearly SHORTER than the standard version. Same length = failure." + AXES;
     default:
-      return "what an ordinary Chinese person would say in this situation in everyday life — neutral and natural, " +
-        "neither slangy nor stiff. Not textbook Chinese, and not Chinese that sounds translated. " +
-        "In this register avoid written-only padding: \u8fdb\u884c/\u4f5c\u51fa/\u4e88\u4ee5 + noun, \u80fd\u591f where \u80fd works, \u4ecd\u7136 where \u8fd8 works.";
+      return "中性标准体 — the UNMARKED BASELINE: what you would write down, or say to someone you do not know well. " +
+        "Axis ①: neither spoken nor written-formal — plain middle. Axis ②: 你/我, no softening prefix. " +
+        "Axis ③: the neutral common word of each pair (累 not 疲惫, 主意 not 方案).\n" +
+        "        Complete subject-verb structure. NO tone particles (啊/呢/吧/呗/嘛), NO 儿化, NO colloquial exaggeration " +
+        "(累死了/贼好/没劲), NO slang. Also no written-only padding: 进行/作出/予以 + noun, 能够 where 能 works, " +
+        "仍然 where 还 works. The other three styles are defined as moves AWAY from this one." + AXES;
   }
 }
 
@@ -97,7 +112,19 @@ const NATURAL_ZH =
   "- Always end with proper Chinese punctuation (\u3002 \uff1f \uff01). Use full-width Chinese punctuation throughout.\n" +
   "- Never add meaning the source does not have (no invented set phrases, no added compliments or apologies) and never drop meaning it does have.\n" +
   "- Always finish with full-width Chinese punctuation (。？！) and use full-width punctuation throughout.\n" +
-  "- Say it out loud in your head. If a Chinese person would never phrase it that way, rewrite it.\n";
+  "- Say it out loud in your head. If a Chinese person would never phrase it that way, rewrite it.\n" +
+  "\nHOW FAR APART THE FOUR STYLES SHOULD BE — same input, four genuinely different outputs:\n" +
+  "  input: I'm so tired today, but I still want to go running.\n" +
+  "    standard 我今天很累，但还是想去跑步。\n" +
+  "    casual   今天累成狗了，还是想去跑两步。\n" +
+  "    formal   今天身体比较疲惫，不过仍打算去跑步。\n" +
+  "    concise  太累了，但还想跑。\n" +
+  "  input: Can you help me take a photo?\n" +
+  "    standard 你能帮我拍张照片吗？\n" +
+  "    casual   帮我拍张照呗？\n" +
+  "    formal   烦请您帮忙拍一张照片。\n" +
+  "    concise  帮我拍张照？\n" +
+  "  Four outputs that differ only by a tone particle or 儿化 are a FAILURE. Each style must change the WORDS.\n";
 
 // —— 简繁 ——
 function scriptName(script) {
