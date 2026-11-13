@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.46";
+const ZH_VERSION = "v3.47";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -61,7 +61,10 @@ function styleDescZh(style) {
         "        Use SEVERAL of: dropped subject/object; colloquial words (累成狗/没劲/搞/弄/咋/干嘛/贼/特/直接/压根); " +
         "tone particles 啊/呢/吧/呗/嘛; 儿化; verb reduplication 跑两步/看一眼/说一声/歇会儿; " +
         "colloquial question endings …行吗？/…成吗？/…不？/…呗？\n" +
-        "        Taking the standard sentence and adding one 啊 is NOT casual — that is a failure. Change the WORDS." + AXES;
+        "        Taking the standard sentence and adding one 啊 is NOT casual — that is a failure. Change the WORDS.\n" +
+        "        But SWAP words, never ADD content. The colloquial markers REPLACE neutral words; they never introduce new "
+        + "information or a new clause. \u201cyou really saved me\u201d \u2192 \u201c\u4f60\u771f\u662f\u6551\u4e86\u6211\u201d \u2714; "
+        + "\u201c\u5dee\u70b9\u513f\u5b8c\u4e86\u4f60\u6551\u4e86\u6211\u201d \u2718 (the source never says anything nearly went wrong)." + AXES;
     case "formal":
       return "书面正式体 — a work email or a message to a client, a boss or a teacher TODAY. " +
         "Axis ①: written, not spoken. Axis ②: 您 + a softening prefix. Axis ③: the formal end of each synonym pair.\n" +
