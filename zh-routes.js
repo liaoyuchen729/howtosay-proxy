@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.40";
+const ZH_VERSION = "v3.41";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -58,7 +58,8 @@ function styleDescZh(style) {
     case "concise":
       return "the shortest thing a real Chinese speaker would still actually say — a quick reply when they are busy. " +
         "Cut every optional word, BUT the result must remain a grammatical, idiomatic sentence: keep the 了/的/吧/啊 that " +
-        "Chinese genuinely needs. Never output a clipped fragment no native would say (e.g. \"太感谢\" is wrong; \"太感谢了\" or \"多谢\" is right).";
+        "Chinese genuinely needs. Never output a clipped fragment no native would say (e.g. \"太感谢\" is wrong; \"太感谢了\" or \"多谢\" is right). " +
+        "It MUST come out clearly SHORTER than the standard version — if it is the same length, you have failed this style.";
     default:
       return "what an ordinary Chinese person would say in this situation in everyday life — neutral and natural, " +
         "neither slangy nor stiff. Not textbook Chinese, and not Chinese that sounds translated. " +
@@ -88,6 +89,8 @@ const NATURAL_ZH =
   "- Never add meaning the source does not have (no invented set phrases, no added compliments, no added apologies) " +
   "and never drop meaning it does have.\n" +
   "- Always end with proper Chinese punctuation (\u3002 \uff1f \uff01). Use full-width Chinese punctuation throughout.\n" +
+  "- Never add meaning the source does not have (no invented set phrases, no added compliments or apologies) and never drop meaning it does have.\n" +
+  "- Always finish with full-width Chinese punctuation (。？！) and use full-width punctuation throughout.\n" +
   "- Say it out loud in your head. If a Chinese person would never phrase it that way, rewrite it.\n";
 
 // —— 简繁 ——
