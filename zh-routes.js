@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.45";
+const ZH_VERSION = "v3.46";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -111,6 +111,12 @@ const NATURAL_ZH =
   "and never drop meaning it does have.\n" +
   "- Always end with proper Chinese punctuation (\u3002 \uff1f \uff01). Use full-width Chinese punctuation throughout.\n" +
   "- Never add meaning the source does not have (no invented set phrases, no added compliments or apologies) and never drop meaning it does have.\n" +
+  "- WHO DOES WHAT MUST NOT FLIP. \u201cI'll get back to you tomorrow\u201d means the SPEAKER will reply: \u201c\u6211\u660e\u5929\u56de\u590d\u60a8\u3002\u201d " +
+  "Turning it into a request (\u201c\u9ebb\u70e6\u60a8\u660e\u65e5\u56de\u590d\u201d) is a serious error. Keep the subject, the agent and the direction of the action exactly as the source has them.\n" +
+  "- Keep the SENTENCE TYPE: a statement stays a statement, a question stays a question, a request stays a request.\n" +
+  "- Keep roughly the same number of clauses as the source. Being casual does NOT mean being chattier: " +
+  "\u201cyou really saved me\u201d \u2192 \u201c\u4f60\u771f\u662f\u6551\u4e86\u6211\u201d, NOT \u201c\u5dee\u70b9\u513f\u5b8c\u86cb\u4e86\u4f60\u6551\u4e86\u6211\u201d; " +
+  "one question stays ONE question, never split into two.\n" +
   "- Always finish with full-width Chinese punctuation (。？！) and use full-width punctuation throughout.\n" +
   "- Say it out loud in your head. If a Chinese person would never phrase it that way, rewrite it.\n" +
   "\nHOW FAR APART THE FOUR STYLES SHOULD BE — same input, four genuinely different outputs:\n" +
