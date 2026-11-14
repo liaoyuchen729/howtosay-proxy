@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.47";
+const ZH_VERSION = "v3.48";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -95,45 +95,75 @@ function styleDescZh(style) {
 // 用户反馈:四种语气都「很翻译腔,不像中国人自己会说的话」。根因是 prompt 把任务框成
 // translate(逐词映射),而不是 say(母语者在这个场景会怎么开口)。这段同时挂在
 // 主对齐链路和 /zh/translate-fast 上,两边口径必须一致。
-const NATURAL_ZH =
-  "\nHOW TO WRITE THE CHINESE (this outranks literal fidelity):\n" +
+// —— 各源语言特有的「硬翻」特征 ——
+// 覆盖 App 的全部界面语言,不能只盯英语 —— 日语学习者碰到的翻译腔
+// 跟英语学习者完全不是一回事(は/が 硬翻成「是」vs the/a 硬翻)。
+// —— 例句的自然度要求 ——
+// 词详情和语法详解里的例句是学习者会照着念的句子,翻译腔的危害比译文更大。
+// 与 naturalZh 同一标准,但例句是自己造的,所以额外要求「真实场景里用得上」。
+const EXAMPLE_NATURAL_ZH =
+  " The sentence must be something a Chinese person would actually say in daily life — " +
+  "neutral spoken register, not textbook filler and not translated-sounding Chinese. " +
+  "No 感到/感觉 + adjective padding, no 进行/作出 + noun, no stacked intensifiers. " +
+  "Keep it concrete and usable (a real situation, not 这是一本书 style filler). " +
+  "End with full-width Chinese punctuation.";
+
+function overRenderZh(srcLang) {
+  switch (srcLang) {
+    case "Japanese":
+      return "rendering Japanese particles one-for-one: は/が are NOT 是, ～ている is not always 正在, " +
+             "～と思います often just drops (not 我认为 every time); never keep Japanese verb-final order";
+    case "Korean":
+      return "rendering Korean grammar one-for-one: 것 is not 的事情, ~고 있다 is not always 正在, " +
+             "do not insert 我/你 that Korean omitted; never keep Korean verb-final order";
+    case "Spanish":
+      return "inserting subject pronouns Spanish already drops (hablo = 说, not 我说 unless yo is written), " +
+             "rendering el/la/los/las, or translating reflexive se";
+    case "Vietnamese":
+      return "rendering every classifier (con/cái/chiếc) as 个, or translating the politeness particles ạ/nhé/à";
+    case "Thai":
+      return "translating the politeness particles ครับ/ค่ะ/คะ, or rendering ที่ as 的 every time";
+    case "Indonesian":
+      return "rendering -nya / -lah / -kah mechanically, or translating yang as 的 every time";
+    default:
+      return "rendering English function words Chinese does not need (that / the / a / of / it)";
+  }
+}
+
+// —— 反翻译腔守则(按源语言定制)——
+// 用户反馈四种语气「都很翻译腔」。根因:prompt 把任务框成 translate(逐词映射),
+// 而不是 say(母语者在这个场景会怎么开口)。主对齐链路和 /zh/translate-fast 共用,
+// 两边口径必须一致。
+function naturalZh(srcLang) {
+  return "\nHOW TO WRITE THE CHINESE (this outranks literal fidelity):\n" +
   "- Write what a native speaker would SAY in that situation. Keep the meaning and the speaker's intent; " +
   "you may restructure the sentence freely. A fluent Chinese sentence beats a faithful word-by-word mapping.\n" +
   "- Chinese drops what context already gives. Do not repeat a subject in the second clause just because the source does: " +
-  "\u201c\u6211\u4eca\u5929\u5f88\u7d2f\uff0c\u4f46\u6211\u8fd8\u662f\u60f3\u53bb\u8dd1\u6b65\u201d \u2192 \u201c\u6211\u4eca\u5929\u5f88\u7d2f\uff0c\u4e0d\u8fc7\u8fd8\u662f\u60f3\u53bb\u8dd1\u6b65\u201d.\n" +
+  "“我今天很累，但我还是想去跑步” → “我今天很累，不过还是想去跑步”.\n" +
   "- Banned translationese habits:\n" +
-  "  \u00b7 \u611f\u5230/\u611f\u89c9 + adjective where the bare adjective is natural (\u6211\u611f\u5230\u975e\u5e38\u75b2\u60eb \u2192 \u6211\u7d2f\u6b7b\u4e86 / \u4eca\u5929\u592a\u7d2f\u4e86)\n" +
-  "  \u00b7 \u5e0c\u671b\u80fd\u591f / \u4ecd\u7136\u5e0c\u671b\u80fd\u591f chains (padding, not register)\n" +
-  "  \u00b7 stacked intensifiers (\u975e\u5e38\u5341\u5206 / \u5f88\u975e\u5e38)\n" +
-  "  \u00b7 duplicated honorifics in one clause (\u60a8\u80fd\u5426\u8bf7\u60a8\u2026 \u2192 \u60a8\u80fd\u5426\u2026 or \u9ebb\u70e6\u60a8\u2026)\n" +
-  "  \u00b7 rendering English function words Chinese does not need (that / the / a / of / it)\n" +
-  "- Register must be CHINESE register. Formal means the way Chinese officialdom and Chinese business actually write " +
-  "(\u70e6\u8bf7/\u656c\u8bf7/\u627f\u8499/\u4e0d\u80dc\u611f\u6fc0/\u7279\u6b64/\u56e0/\u6545 + four-character phrases), NOT an English formal sentence translated word for word. " +
-  "Casual means the way Chinese people actually chat, NOT English slang translated.\n" +
-  "- Never add meaning the source does not have (no invented set phrases, no added compliments, no added apologies) " +
+  "  · 感到/感觉 + adjective where the bare adjective is natural (我感到非常疲惫 → 我累死了 / 今天太累了)\n" +
+  "  · 希望能够 / 仍然希望能够 chains (padding, not register)\n" +
+  "  · stacked intensifiers (非常十分 / 很非常)\n" +
+  "  · duplicated honorifics in one clause (您能否请您… → 您能否… or 麻烦您…)\n" +
+  "  · " + overRenderZh(srcLang) + "\n" +
+  "- Register must be CHINESE register, on the Chinese axes — not an English formality ladder translated.\n" +
+  "- Never add meaning the source does not have (no invented set phrases, no added compliments or apologies) " +
   "and never drop meaning it does have.\n" +
-  "- Always end with proper Chinese punctuation (\u3002 \uff1f \uff01). Use full-width Chinese punctuation throughout.\n" +
-  "- Never add meaning the source does not have (no invented set phrases, no added compliments or apologies) and never drop meaning it does have.\n" +
-  "- WHO DOES WHAT MUST NOT FLIP. \u201cI'll get back to you tomorrow\u201d means the SPEAKER will reply: \u201c\u6211\u660e\u5929\u56de\u590d\u60a8\u3002\u201d " +
-  "Turning it into a request (\u201c\u9ebb\u70e6\u60a8\u660e\u65e5\u56de\u590d\u201d) is a serious error. Keep the subject, the agent and the direction of the action exactly as the source has them.\n" +
+  "- WHO DOES WHAT MUST NOT FLIP. “I'll get back to you tomorrow” means the SPEAKER will reply: “我明天回复您。” " +
+  "Turning it into a request (“麻烦您明日回复”) is a serious error. Keep the subject, the agent and the direction " +
+  "of the action exactly as the source has them.\n" +
   "- Keep the SENTENCE TYPE: a statement stays a statement, a question stays a question, a request stays a request.\n" +
   "- Keep roughly the same number of clauses as the source. Being casual does NOT mean being chattier: " +
-  "\u201cyou really saved me\u201d \u2192 \u201c\u4f60\u771f\u662f\u6551\u4e86\u6211\u201d, NOT \u201c\u5dee\u70b9\u513f\u5b8c\u86cb\u4e86\u4f60\u6551\u4e86\u6211\u201d; " +
-  "one question stays ONE question, never split into two.\n" +
-  "- Always finish with full-width Chinese punctuation (。？！) and use full-width punctuation throughout.\n" +
+  "“you really saved me” → “你真是救了我”, NOT “差点儿完蛋了你救了我”; one question stays ONE question, never split into two.\n" +
+  "- Always end with full-width Chinese punctuation (。？！) and use full-width punctuation throughout.\n" +
   "- Say it out loud in your head. If a Chinese person would never phrase it that way, rewrite it.\n" +
   "\nHOW FAR APART THE FOUR STYLES SHOULD BE — same input, four genuinely different outputs:\n" +
-  "  input: I'm so tired today, but I still want to go running.\n" +
-  "    standard 我今天很累，但还是想去跑步。\n" +
-  "    casual   今天累成狗了，还是想去跑两步。\n" +
-  "    formal   今天身体比较疲惫，不过仍打算去跑步。\n" +
-  "    concise  太累了，但还想跑。\n" +
-  "  input: Can you help me take a photo?\n" +
-  "    standard 你能帮我拍张照片吗？\n" +
-  "    casual   帮我拍张照呗？\n" +
-  "    formal   烦请您帮忙拍一张照片。\n" +
-  "    concise  帮我拍张照？\n" +
+  "  standard 我今天很累，但还是想去跑步。\n" +
+  "  casual   今天累成狗了，可还想去跑两步。\n" +
+  "  formal   今天身体较为疲惫，不过仍打算去跑步。\n" +
+  "  concise  今天累，但还想跑。\n" +
   "  Four outputs that differ only by a tone particle or 儿化 are a FAILURE. Each style must change the WORDS.\n";
+}
 
 // —— 简繁 ——
 function scriptName(script) {
@@ -155,7 +185,7 @@ function promptWordsZh(srcLang, script, compact = false) {
     `Rules:\n` +
     `- translation: what a native speaker would say for the input, in the STYLE given at the top of the user message. ` +
     `Let the style drive the wording; it will differ from the other styles on its own. NEVER distort the Chinese just to look different.\n` +
-    NATURAL_ZH +
+    naturalZh(srcLang) +
     `- words: split the Chinese translation into meaningful units IN ORDER, together covering the whole translation.\n` +
     `  SPLITTING — units that BELONG TOGETHER stay ONE unit (they express one source concept jointly):\n` +
     `  • number/demonstrative + measure word: 三本 / 两只 / 一个 / 这部 / 那条 = ONE unit (never 三 + 本). The noun stays separate: 三本 + 书.\n` +
@@ -1805,7 +1835,7 @@ export function mountZhRoutes(app, deps) {
         required: ["translation"], additionalProperties: false
       }),
       messages: [
-        sys(`Say the user's ${sourceLanguage} the way a native speaker of Mandarin would say it: ${styleDescZh(style)}. Write it in ${scriptName(script)}. Return ONLY {"translation": "..."}.` + NATURAL_ZH + `Convey everything the source says and nothing it does not; you may restructure freely to sound native.`),
+        sys(`Say the user's ${sourceLanguage} the way a native speaker of Mandarin would say it: ${styleDescZh(style)}. Write it in ${scriptName(script)}. Return ONLY {"translation": "..."}.` + naturalZh(sourceLanguage) + `Convey everything the source says and nothing it does not; you may restructure freely to sound native.`),
         usr(sourceText)
       ]
     });
@@ -1977,7 +2007,7 @@ export function mountZhRoutes(app, deps) {
         }),
         messages: [
           sys(`Write ONE short, natural Chinese example sentence (HSK1-4 vocabulary) using the given word, in ${scriptName(script)}. ` +
-              `Provide: zh (the sentence), pinyin (WITH TONE MARKS for the whole sentence), gloss (a natural ${sourceLanguage} translation).`),
+              `Provide: zh (the sentence), pinyin (WITH TONE MARKS for the whole sentence), gloss (a natural ${sourceLanguage} translation).` + EXAMPLE_NATURAL_ZH),
           usr(`Word: ${chinese}\nMeaning: ${definition}`)
         ]
       });
@@ -2041,7 +2071,7 @@ export function mountZhRoutes(app, deps) {
               `    · zh = the Chinese sentence in ${scriptName(script)}.\n` +
               `    · pinyin = Mandarin romanization WITH tone marks.\n` +
               `    · gloss = a natural TRANSLATION of the sentence into ${sourceLanguage}, written in ${sourceLanguage}'s OWN words and script. NEVER put pinyin/romanization here — gloss and pinyin must be different.\n` +
-              `Correct example for a Japanese learner: {"zh":"我把门关上了。","pinyin":"wǒ bǎ mén guān shàng le","gloss":"私はドアを閉めました。"}`),
+              `Correct example for a Japanese learner: {"zh":"我把门关上了。","pinyin":"wǒ bǎ mén guān shàng le","gloss":"私はドアを閉めました。"}` + EXAMPLE_NATURAL_ZH),
           usr(`Grammar point: ${name}`)
         ]
       });
