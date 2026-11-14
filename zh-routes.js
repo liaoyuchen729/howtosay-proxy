@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 // 版本号:同时用于 /zh/version 探针和整句标注缓存的版本闸 ——
 // prompt 或紧凑输出格式一改就改这里,磁盘上的旧标注结果立即作废。
-const ZH_VERSION = "v3.48";
+const ZH_VERSION = "v3.49";
 
 // —— 反馈内存缓冲:最近 200 条,给 /zh/feedback-recent 拉取(不依赖 Axiom;进程重启清空)——
 const zhFeedbackBuffer = [];
@@ -71,6 +71,9 @@ function styleDescZh(style) {
         "        Upgrade like this: 你→您 · 帮我→麻烦您/烦请您 · 累→疲惫 · 不好意思→抱歉/非常抱歉 · " +
         "不太好→恐怕不太妥当 · 想→打算/希望 · 主意→想法/方案 · 晚点→晚一些/有所延迟 · 慢点→稍慢一些 · " +
         "说→说明 · 给→提供 · 帮→协助 · 一点→稍/略。No tone particles, no 儿化, no slang, complete sentences.\n" +
+        "        The softening prefix (麻烦您/烦请您/劳驾) belongs ONLY to a REQUEST. If the sentence is a statement about "
+        + "YOURSELF (I'll be late / I'll reply tomorrow) there is nobody to soften — just use the formal vocabulary. "
+        + "“非常抱歉，麻烦您我将有所延迟。” is ungrammatical; write “非常抱歉，我可能会晚一些。”\n" +
         "        (a) It must NOT equal the standard version. If it does, raise the vocabulary layer.\n" +
         "        (b) It must NOT become Classical Chinese: never 然/拟/兹/乃/此为/之策/特此 or any 文言 particle, and never " +
         "recite set phrases the source did not say (承蒙关照/雪中送炭/敬请谅解). At most ONE honorific per clause — " +
@@ -307,6 +310,8 @@ function fixupZhTranslation(text) {
   if (!t) return t;
   // 客套前缀 + 能否/能不能 在同一分句 = 叠加,去掉前缀
   t = t.replace(/(?:烦请|麻烦|劳驾|有劳)\s*(您|你)?\s*(能否|能不能)/g, (_m, p, q) => (p || "您") + q);
+  // 客套前缀硬塞进陈述句:「麻烦您我将…」「麻烦您知悉我将…」—— 前缀后面直接跟「我」必错
+  t = t.replace(/(?:麻烦|烦请|劳驾|有劳)\s*您?\s*(?:知悉|告知)?\s*(?=我[将会能可想要是])/g, "");
   // 您能否请您… / 请您能否… = 重复敬语
   t = t.replace(/(您|你)(能否|能不能)请\1/g, "$1$2");
   t = t.replace(/请(您|你)(能否|能不能)/g, "$1$2");
